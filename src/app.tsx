@@ -4,16 +4,28 @@ import type { Server } from "node:net";
 import type { GmuxConfig } from "./config.js";
 import type { AgentSession } from "./types.js";
 import { TmuxPoller } from "./poller.js";
+import { setupSocketServer } from "./socket-server.js";
+import { validateEvent } from "./socket-events.js";
+import type { SocketEvent } from "./socket-types.js";
 
 export interface AppProps {
   config: GmuxConfig;
   server: Server;
 }
 
-export function App({ config, server: _server }: AppProps) {
+export function App({ config, server }: AppProps) {
   const { exit } = useApp();
   const [sessions, setSessions] = useState<AgentSession[]>([]);
   const pollerRef = useRef<TmuxPoller | null>(null);
+
+  useEffect(() => {
+    setupSocketServer(server, (raw: SocketEvent) => {
+      const event = validateEvent(raw);
+      if (event) {
+        console.log("gmux: received event", event);
+      }
+    });
+  }, [server]);
 
   useInput((input, key) => {
     if (input === "q" || (key.ctrl && input === "q")) {

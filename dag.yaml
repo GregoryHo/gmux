@@ -2,29 +2,29 @@ epics:
   # ── Layer 0: Foundation ──────────────────────────
   - id: "epic-foundation"
     name: "Project Foundation"
-    status: "pending"
+    status: "completed"
     spec_path: "epics/epic-foundation/epic.md"
     worktree: null
     depends_on: []
     features:
       - id: "foundation-tech-stack"
         name: "Project scaffolding (TS + React + Ink + Vitest)"
-        status: "pending"
+        status: "completed"
         source_requirement: "fr-lifecycle-007"
         depends_on: []
       - id: "foundation-config"
         name: "Configuration file loader"
-        status: "pending"
+        status: "completed"
         source_requirement: "fr-lifecycle-006"
         depends_on: ["foundation-tech-stack"]
       - id: "foundation-startup"
         name: "Startup sequence (PID file + socket bind)"
-        status: "pending"
+        status: "completed"
         source_requirement: "fr-lifecycle-001"
         depends_on: ["foundation-config"]
       - id: "foundation-shutdown"
         name: "Shutdown sequence (cleanup + signal handling)"
-        status: "pending"
+        status: "completed"
         source_requirement: "fr-lifecycle-002"
         depends_on: ["foundation-startup"]
 
