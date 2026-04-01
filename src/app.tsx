@@ -1,14 +1,27 @@
+import { useEffect } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import type { Server } from "node:net";
 import type { GmuxConfig } from "./config.js";
+import { setupSocketServer } from "./socket-server.js";
+import { validateEvent } from "./socket-events.js";
+import type { SocketEvent } from "./socket-types.js";
 
 export interface AppProps {
   config: GmuxConfig;
   server: Server;
 }
 
-export function App({ config: _config, server: _server }: AppProps) {
+export function App({ config: _config, server }: AppProps) {
   const { exit } = useApp();
+
+  useEffect(() => {
+    setupSocketServer(server, (raw: SocketEvent) => {
+      const event = validateEvent(raw);
+      if (event) {
+        console.log("gmux: received event", event);
+      }
+    });
+  }, [server]);
 
   useInput((input, key) => {
     if (input === "q" || (key.ctrl && input === "q")) {
