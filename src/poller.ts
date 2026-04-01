@@ -3,6 +3,7 @@ import type { AgentPane, AgentSession } from "./types.js";
 import { listAgentPanes, capturePaneContent } from "./tmux.js";
 import { classifyStatus } from "./heuristics.js";
 import { extractMetadata } from "./metadata.js";
+import { StatusOverrideStore } from "./status-overrides.js";
 
 export type PollerEvent = "add" | "remove" | "update" | "error";
 
@@ -25,10 +26,17 @@ export class TmuxPoller extends EventEmitter {
   private previousTargets: Map<string, AgentSession> = new Map();
   private _sessions: AgentSession[] = [];
   private _polling = false;
+  private _statusOverrides: StatusOverrideStore;
 
-  constructor(pollInterval: number = 3000) {
+  constructor(pollInterval: number = 3000, statusOverrides?: StatusOverrideStore) {
     super();
     this.interval = pollInterval;
+    this._statusOverrides = statusOverrides ?? new StatusOverrideStore();
+  }
+
+  /** The status override store used by this poller. */
+  get statusOverrides(): StatusOverrideStore {
+    return this._statusOverrides;
   }
 
   /** Current snapshot of all detected agent sessions. */
@@ -93,7 +101,9 @@ export class TmuxPoller extends EventEmitter {
         continue;
       }
 
-      const status = classifyStatus(paneContent);
+      // Socket override takes priority over heuristic classification
+      const override = this._statusOverrides.get(pane.target);
+      const status = override ?? classifyStatus(paneContent);
       const metadata = extractMetadata(paneContent);
 
       results.push({
@@ -131,6 +141,9 @@ export class TmuxPoller extends EventEmitter {
         this.emit("add", session);
       }
     }
+
+    // Prune socket overrides for panes that no longer exist
+    this._statusOverrides.pruneStale(new Set(newTargets.keys()));
 
     this.previousTargets = newTargets;
     this.emit("update", newSessions);

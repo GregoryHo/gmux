@@ -6,6 +6,8 @@ import type { AgentSession } from "./types.js";
 import { TmuxPoller } from "./poller.js";
 import { setupSocketServer } from "./socket-server.js";
 import { validateEvent } from "./socket-events.js";
+import { StatusOverrideStore } from "./status-overrides.js";
+import type { AgentStatus } from "./types.js";
 import type { SocketEvent } from "./socket-types.js";
 
 export interface AppProps {
@@ -17,12 +19,17 @@ export function App({ config, server }: AppProps) {
   const { exit } = useApp();
   const [sessions, setSessions] = useState<AgentSession[]>([]);
   const pollerRef = useRef<TmuxPoller | null>(null);
+  const overridesRef = useRef(new StatusOverrideStore());
 
   useEffect(() => {
     setupSocketServer(server, (raw: SocketEvent) => {
       const event = validateEvent(raw);
-      if (event) {
-        console.log("gmux: received event", event);
+      if (!event) return;
+
+      const target = `${event.session}:${event.pane}`;
+
+      if (event.event === "status" && event.status) {
+        overridesRef.current.set(target, event.status as AgentStatus);
       }
     });
   }, [server]);
@@ -34,7 +41,7 @@ export function App({ config, server }: AppProps) {
   });
 
   useEffect(() => {
-    const poller = new TmuxPoller(config.pollInterval);
+    const poller = new TmuxPoller(config.pollInterval, overridesRef.current);
     pollerRef.current = poller;
 
     poller.on("update", (updated: AgentSession[]) => {
