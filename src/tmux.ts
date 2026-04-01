@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { access, constants } from "node:fs/promises";
 import type { AgentPane } from "./types.js";
+import { sessionNameFromTarget } from "./utils.js";
 
 /** Pattern matching Claude Code's version-as-process-name convention. */
 const AGENT_COMMAND_PATTERN = /^\d+\.\d+\.\d+$/;
@@ -74,11 +75,7 @@ export function parsePaneLine(line: string): AgentPane | null {
   if (Number.isNaN(pid)) return null;
   if (!AGENT_COMMAND_PATTERN.test(command)) return null;
 
-  // Extract session name from target "session_name:window.pane"
-  const colonIdx = target.indexOf(":");
-  const sessionName = colonIdx > 0 ? target.substring(0, colonIdx) : target;
-
-  return { target, sessionName, command, cwd, tty, pid };
+  return { target, sessionName: sessionNameFromTarget(target), command, cwd, tty, pid };
 }
 
 /**
@@ -130,4 +127,12 @@ export function parseListPanesOutput(
  */
 export async function capturePaneContent(target: string): Promise<string> {
   return runTmux(["capture-pane", "-t", target, "-p"]);
+}
+
+/**
+ * Capture the full scrollback history of a tmux pane (not just visible area).
+ * Used for the expanded detail view — called on-demand, not during polling.
+ */
+export async function captureFullScrollback(target: string): Promise<string> {
+  return runTmux(["capture-pane", "-t", target, "-p", "-S", "-"]);
 }

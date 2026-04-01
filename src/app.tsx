@@ -12,7 +12,7 @@ import { setupSocketServer } from "./socket-server.js";
 import { validateEvent } from "./socket-events.js";
 import { StatusOverrideStore } from "./status-overrides.js";
 import { readConversation, type ConversationEntry } from "./jsonl-reader.js";
-import { runTmux } from "./tmux.js";
+import { captureFullScrollback } from "./tmux.js";
 import { interruptPane, killSession, listClients, switchClient, newSession, sendLaunchCommand } from "./commander.js";
 import type { TmuxClient } from "./commander.js";
 import { Notifier } from "./notifier.js";
@@ -53,6 +53,10 @@ export function App({ config, server }: AppProps) {
   const [scrollbackContent, setScrollbackContent] = useState("");
   const [scrollOffset, setScrollOffset] = useState(0);
   const pollerRef = useRef<TmuxPoller | null>(null);
+
+  const pushNotification = useCallback((name: string, msg: string) => {
+    setNotifications((prev) => addNotification(prev, createNotification(name, msg)));
+  }, []);
   const overridesRef = useRef(new StatusOverrideStore());
   const prevStatusRef = useRef(new Map<string, AgentStatus>());
   const notifierRef = useRef(new Notifier(config));
@@ -73,17 +77,13 @@ export function App({ config, server }: AppProps) {
 
       const target = `${event.session}:${event.pane}`;
 
-      if (event.event === "status" && event.status) {
+      const validStatuses: AgentStatus[] = ["active", "idle", "needs_attention"];
+      if (event.event === "status" && event.status && validStatuses.includes(event.status as AgentStatus)) {
         overridesRef.current.set(target, event.status as AgentStatus);
       }
 
       if (event.event === "notify" && event.message) {
-        setNotifications((prev) =>
-          addNotification(
-            prev,
-            createNotification(event.session, event.message!),
-          ),
-        );
+        pushNotification(event.session, event.message);
       }
     });
   }, [server]);
@@ -94,24 +94,16 @@ export function App({ config, server }: AppProps) {
     pollerRef.current = poller;
 
     poller.on("add", (session: AgentSession) => {
-      setNotifications((prev) =>
-        addNotification(
-          prev,
-          createNotification(session.sessionName, "session started"),
-        ),
-      );
+      pushNotification(session.sessionName, "session started");
     });
 
     poller.on("remove", (target: string) => {
       const name = sessionNameFromTarget(target);
-      setNotifications((prev) =>
-        addNotification(prev, createNotification(name, "session ended")),
-      );
+      pushNotification(name, "session ended");
       notifierRef.current.notify(name, "session ended");
     });
 
     poller.on("update", (updated: AgentSession[]) => {
-      // Detect status changes to idle/needs_attention
       const prevMap = prevStatusRef.current;
       for (const session of updated) {
         const prev = prevMap.get(session.target);
@@ -120,14 +112,8 @@ export function App({ config, server }: AppProps) {
           prev !== session.status &&
           (session.status === "idle" || session.status === "needs_attention")
         ) {
-          const msg =
-            session.status === "idle" ? "finished" : "needs input";
-          setNotifications((events) =>
-            addNotification(
-              events,
-              createNotification(session.sessionName, msg),
-            ),
-          );
+          const msg = session.status === "idle" ? "finished" : "needs input";
+          pushNotification(session.sessionName, msg);
           notifierRef.current.notify(session.sessionName, msg);
         }
       }
@@ -142,9 +128,11 @@ export function App({ config, server }: AppProps) {
       // Only update sessions if something actually changed
       setSessions((prev) => {
         if (prev.length !== updated.length) return updated;
-        const changed = updated.some((s, i) =>
-          s.target !== prev[i]?.target || s.status !== prev[i]?.status || s.paneContent !== prev[i]?.paneContent
-        );
+        const changed = updated.some((s, i) => {
+          const p = prev[i];
+          return !p || s.target !== p.target || s.status !== p.status
+            || s.cwd !== p.cwd || s.metadata.contextPct !== p.metadata.contextPct;
+        });
         return changed ? updated : prev;
       });
 
@@ -265,9 +253,7 @@ export function App({ config, server }: AppProps) {
       }
 
       setUIMode({ kind: "flash", message: `Created session ${name}` });
-      setNotifications((prev) =>
-        addNotification(prev, createNotification(name, "session created")),
-      );
+      pushNotification(name, "session created");
     },
     [],
   );
@@ -281,9 +267,7 @@ export function App({ config, server }: AppProps) {
       setSessions((prev) => prev.filter((s) => s.target !== target));
 
       const name = sessionNameFromTarget(target);
-      setNotifications((prev) =>
-        addNotification(prev, createNotification(name, "session ended")),
-      );
+      pushNotification(name, "session ended");
     }
   }, []);
 
@@ -336,7 +320,7 @@ export function App({ config, server }: AppProps) {
         if (selectedSession) {
           setScrollOffset(0);
           // Capture full scrollback on-demand
-          runTmux(["capture-pane", "-t", selectedSession.target, "-p", "-S", "-"])
+          captureFullScrollback(selectedSession.target)
             .then((content) => {
               setScrollbackContent(content);
               setUIMode({ kind: "expanded-detail" });
@@ -367,6 +351,7 @@ export function App({ config, server }: AppProps) {
   useInput(
     (input, key) => {
       if (key.escape || (key.ctrl && input === "e")) {
+        setScrollbackContent("");
         setUIMode({ kind: "normal" });
         return;
       }
@@ -396,12 +381,7 @@ export function App({ config, server }: AppProps) {
       if (uiMode.kind !== "confirm-kill") return;
       if (input === "y" || input === "Y") {
         void killSession(uiMode.sessionName);
-        setNotifications((prev) =>
-          addNotification(
-            prev,
-            createNotification(uiMode.sessionName, "killed"),
-          ),
-        );
+        pushNotification(uiMode.sessionName, "killed");
         setUIMode({ kind: "normal" });
         return;
       }

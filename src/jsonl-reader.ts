@@ -31,67 +31,46 @@ async function findLatestJsonl(projectDir: string): Promise<string | null> {
   const jsonlFiles = entries.filter((f) => f.endsWith(".jsonl"));
   if (jsonlFiles.length === 0) return null;
 
-  let latest: string | null = null;
-  let latestMtime = 0;
-
-  for (const file of jsonlFiles) {
-    const fullPath = join(projectDir, file);
-    try {
-      const s = await stat(fullPath);
-      if (s.mtimeMs > latestMtime) {
-        latestMtime = s.mtimeMs;
-        latest = fullPath;
+  const stats = await Promise.all(
+    jsonlFiles.map(async (file) => {
+      const fullPath = join(projectDir, file);
+      try {
+        const s = await stat(fullPath);
+        return { path: fullPath, mtimeMs: s.mtimeMs };
+      } catch {
+        return null;
       }
-    } catch {
-      continue;
-    }
+    }),
+  );
+
+  let latest: { path: string; mtimeMs: number } | null = null;
+  for (const s of stats) {
+    if (s && (!latest || s.mtimeMs > latest.mtimeMs)) latest = s;
   }
 
-  return latest;
+  return latest?.path ?? null;
 }
 
 /**
- * Read the last N lines of a file efficiently (read from end).
+ * Read the last N non-empty lines of a file.
+ * Reads a tail chunk from the end rather than the entire file.
  */
 async function readLastLines(filePath: string, maxLines: number): Promise<string[]> {
-  const CHUNK_SIZE = 8192;
+  // Read a generous tail chunk — 64KB covers ~1000 JSONL lines
+  const TAIL_SIZE = 65536;
   let fh;
   try {
     fh = await open(filePath, "r");
     const fileStat = await fh.stat();
     const fileSize = fileStat.size;
-
     if (fileSize === 0) return [];
 
-    let position = fileSize;
-    let buffer = "";
-    const lines: string[] = [];
+    const readSize = Math.min(TAIL_SIZE, fileSize);
+    const position = fileSize - readSize;
+    const chunk = Buffer.alloc(readSize);
+    await fh.read(chunk, 0, readSize, position);
 
-    while (position > 0 && lines.length < maxLines) {
-      const readSize = Math.min(CHUNK_SIZE, position);
-      position -= readSize;
-
-      const chunk = Buffer.alloc(readSize);
-      await fh.read(chunk, 0, readSize, position);
-      buffer = chunk.toString("utf-8") + buffer;
-
-      const parts = buffer.split("\n");
-      // Keep the incomplete first part in the buffer
-      buffer = parts.shift() ?? "";
-
-      // Collect complete lines from the end
-      for (let i = parts.length - 1; i >= 0 && lines.length < maxLines; i--) {
-        if (parts[i].trim().length > 0) {
-          lines.unshift(parts[i]);
-        }
-      }
-    }
-
-    // Don't forget the remaining buffer (first line of file)
-    if (buffer.trim().length > 0 && lines.length < maxLines) {
-      lines.unshift(buffer);
-    }
-
+    const lines = chunk.toString("utf-8").split("\n").filter((l) => l.trim().length > 0);
     return lines.slice(-maxLines);
   } catch {
     return [];
