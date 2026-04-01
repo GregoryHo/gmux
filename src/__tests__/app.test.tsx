@@ -22,8 +22,13 @@ describe("App", () => {
     expect(lastFrame()).toContain("No agent sessions detected");
   });
 
-  it("shows quit hint", () => {
+  it("shows session count in header", () => {
     const { lastFrame } = render(<App {...makeProps()} />);
-    expect(lastFrame()).toContain("Press q to quit");
+    expect(lastFrame()).toContain("0 sessions");
+  });
+
+  it("shows command input prompt", () => {
+    const { lastFrame } = render(<App {...makeProps()} />);
+    expect(lastFrame()).toContain("❯");
   });
 });
