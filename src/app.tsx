@@ -11,6 +11,7 @@ import { validateEvent } from "./socket-events.js";
 import { StatusOverrideStore } from "./status-overrides.js";
 import { interruptPane, killSession, listClients, switchClient } from "./commander.js";
 import type { TmuxClient } from "./commander.js";
+import { Notifier } from "./notifier.js";
 import {
   SessionList,
   DetailPanel,
@@ -43,6 +44,7 @@ export function App({ config, server }: AppProps) {
   const pollerRef = useRef<TmuxPoller | null>(null);
   const overridesRef = useRef(new StatusOverrideStore());
   const prevStatusRef = useRef(new Map<string, AgentStatus>());
+  const notifierRef = useRef(new Notifier(config));
 
   // Auto-clear flash messages after 2 seconds
   useEffect(() => {
@@ -95,6 +97,7 @@ export function App({ config, server }: AppProps) {
       setNotifications((prev) =>
         addNotification(prev, createNotification(name, "session ended")),
       );
+      notifierRef.current.notify(name, "session ended");
     });
 
     poller.on("update", (updated: AgentSession[]) => {
@@ -115,6 +118,7 @@ export function App({ config, server }: AppProps) {
               createNotification(session.sessionName, msg),
             ),
           );
+          notifierRef.current.notify(session.sessionName, msg);
         }
       }
 
