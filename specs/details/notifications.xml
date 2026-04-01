@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<detail id="notifications" title="Notifications">
+
+  <requirement id="fr-notify-001">
+    <title>In-dashboard visual notifications</title>
+    <description>Status changes and events appear as visual indicators in the dashboard:
+    highlighted rows in the session table and entries in the notification feed.</description>
+    <trace>REQ-F011</trace>
+    <acceptance_criteria>
+      <criterion id="fr-notify-001-ac1">
+        Given a session transitions from "active" to "needs_attention",
+        when the dashboard re-renders,
+        then the session row shows the ⚡ status dot and the row is highlighted.
+      </criterion>
+      <criterion id="fr-notify-001-ac2">
+        Given a new notification event occurs,
+        when the notification feed updates,
+        then the event appears at the top with a relative timestamp.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-notify-002">
+    <title>macOS native notifications</title>
+    <description>On status transitions to "idle" or "needs_attention", and on session
+    start/end events, a macOS system notification is pushed via osascript or
+    terminal-notifier.</description>
+    <trace>REQ-F010</trace>
+    <acceptance_criteria>
+      <criterion id="fr-notify-002-ac1">
+        Given a session transitions to "needs_attention",
+        when Notifier fires,
+        then a macOS notification appears with title "gmux" and body identifying the session and reason.
+      </criterion>
+      <criterion id="fr-notify-002-ac2">
+        Given a session transitions to "idle" (from "active"),
+        when Notifier fires,
+        then a macOS notification appears indicating the session finished.
+      </criterion>
+      <criterion id="fr-notify-002-ac3">
+        Given osascript/terminal-notifier is unavailable or fails,
+        when Notifier attempts to push,
+        then the failure is logged and only the in-dashboard notification is shown.
+        gmux does not crash.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-notify-003">
+    <title>Notification cooldown</title>
+    <description>To prevent notification spam, macOS native notifications for the same
+    session are rate-limited with a 5-minute cooldown. In-dashboard visual notifications
+    are not rate-limited.</description>
+    <trace>REQ-F010</trace>
+    <acceptance_criteria>
+      <criterion id="fr-notify-003-ac1">
+        Given a macOS notification was sent for session arcforge 2 minutes ago,
+        when another notification event fires for the same session,
+        then the macOS notification is suppressed. The in-dashboard notification still appears.
+      </criterion>
+      <criterion id="fr-notify-003-ac2">
+        Given a macOS notification was sent for session arcforge 6 minutes ago,
+        when another notification event fires for the same session,
+        then the macOS notification is sent (cooldown expired).
+      </criterion>
+      <criterion id="fr-notify-003-ac3">
+        Given a macOS notification was sent for session arcforge,
+        when a notification fires for a different session (workspace),
+        then the macOS notification is sent (cooldown is per-session).
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-notify-004">
+    <title>Optional notification sound</title>
+    <description>Notifications can optionally play a sound. Configured in
+    ~/.config/gmux/config.json under the "sound" key (boolean, default: false).</description>
+    <trace>REQ-F012</trace>
+    <acceptance_criteria>
+      <criterion id="fr-notify-004-ac1">
+        Given sound is enabled in config,
+        when a macOS notification fires,
+        then the system default notification sound plays.
+      </criterion>
+      <criterion id="fr-notify-004-ac2">
+        Given sound is disabled or config is absent,
+        when a macOS notification fires,
+        then no sound plays.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+</detail>

@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<detail id="lifecycle" title="Process Lifecycle and Error Handling">
+
+  <requirement id="fr-lifecycle-001">
+    <title>Startup sequence</title>
+    <description>gmux startup: write PID file, bind Unix socket, start TmuxPoller,
+    render Dashboard. If a stale socket/pid from a previous crash exists, clean up
+    before proceeding.</description>
+    <trace>REQ-N001, REQ-N003</trace>
+    <acceptance_criteria>
+      <criterion id="fr-lifecycle-001-ac1">
+        Given no previous gmux instance exists,
+        when gmux starts,
+        then /tmp/gmux.pid is written with the current PID,
+        /tmp/gmux.sock is bound, poller starts, and dashboard renders.
+      </criterion>
+      <criterion id="fr-lifecycle-001-ac2">
+        Given /tmp/gmux.sock exists but the PID in /tmp/gmux.pid is dead,
+        when gmux starts,
+        then the stale socket and pid files are removed, and gmux starts normally.
+      </criterion>
+      <criterion id="fr-lifecycle-001-ac3">
+        Given /tmp/gmux.pid points to a live gmux process,
+        when a second gmux attempts to start,
+        then it exits with message "gmux already running (PID: N)" and exit code 1.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-lifecycle-002">
+    <title>Shutdown sequence</title>
+    <description>On q, Ctrl-Q, SIGINT, or SIGTERM: stop poller, close socket,
+    remove /tmp/gmux.sock and /tmp/gmux.pid, exit. Never touch tmux sessions.</description>
+    <trace>REQ-N002</trace>
+    <acceptance_criteria>
+      <criterion id="fr-lifecycle-002-ac1">
+        Given user presses q,
+        when gmux shuts down,
+        then poller stops, socket closes, /tmp/gmux.sock and /tmp/gmux.pid are removed,
+        and the process exits with code 0.
+      </criterion>
+      <criterion id="fr-lifecycle-002-ac2">
+        Given gmux receives SIGTERM,
+        when signal handler runs,
+        then the same cleanup as q is performed.
+      </criterion>
+      <criterion id="fr-lifecycle-002-ac3">
+        Given 3 agent sessions are running when gmux quits,
+        when gmux exits,
+        then all 3 tmux sessions remain running and unaffected.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-lifecycle-003">
+    <title>tmux unavailable — degraded mode</title>
+    <description>When tmux commands fail (not installed, server crashed), gmux enters
+    degraded mode with stale data and a warning banner. Auto-recovers when tmux returns.</description>
+    <trace>REQ-N004</trace>
+    <acceptance_criteria>
+      <criterion id="fr-lifecycle-003-ac1">
+        Given tmux list-panes fails,
+        when TmuxPoller retries once after 1 second and still fails,
+        then dashboard shows banner "tmux not reachable — retrying every 5s"
+        and session list shows last-known data with ⚠ badges.
+      </criterion>
+      <criterion id="fr-lifecycle-003-ac2">
+        Given gmux is in degraded mode,
+        when tmux becomes available again,
+        then the banner clears, session list refreshes, and normal polling resumes.
+      </criterion>
+      <criterion id="fr-lifecycle-003-ac3">
+        Given gmux is in degraded tmux mode,
+        when a socket event arrives,
+        then it is still processed normally (socket path is independent of tmux).
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-lifecycle-004">
+    <title>Socket unavailable — polling-only mode</title>
+    <description>When socket bind fails (for reasons other than a stale file from a
+    previous instance), gmux continues with polling only and shows a warning.</description>
+    <trace>REQ-N004</trace>
+    <acceptance_criteria>
+      <criterion id="fr-lifecycle-004-ac1">
+        Given socket bind fails with a non-EADDRINUSE error,
+        when gmux starts,
+        then it starts successfully in polling-only mode with banner
+        "socket unavailable — polling only".
+      </criterion>
+      <criterion id="fr-lifecycle-004-ac2">
+        Given gmux is in polling-only mode,
+        when all other features are used (navigation, send-keys, create session),
+        then they work normally.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-lifecycle-005">
+    <title>send-keys failure handling</title>
+    <description>When tmux send-keys fails because the target pane no longer exists,
+    remove the pane from SessionStore and notify the user.</description>
+    <trace>REQ-F005</trace>
+    <acceptance_criteria>
+      <criterion id="fr-lifecycle-005-ac1">
+        Given user sends a message to arcforge:1.1 but the pane has been closed,
+        when send-keys returns an error,
+        then arcforge:1.1 is removed from the session list and a "session ended"
+        notification appears.
+      </criterion>
+      <criterion id="fr-lifecycle-005-ac2">
+        Given send-keys fails,
+        when the error is handled,
+        then no retry is attempted.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-lifecycle-006">
+    <title>Configuration file</title>
+    <description>gmux reads configuration from ~/.config/gmux/config.json.
+    If the file does not exist, sensible defaults are used.</description>
+    <trace>REQ-N001</trace>
+    <config_schema>
+      <field name="pollInterval" type="number" default="3000" unit="ms"
+             description="Interval between tmux polls" />
+      <field name="notificationCooldown" type="number" default="300000" unit="ms"
+             description="Per-session macOS notification cooldown (5 minutes)" />
+      <field name="sound" type="boolean" default="false"
+             description="Play sound with macOS notifications" />
+    </config_schema>
+    <acceptance_criteria>
+      <criterion id="fr-lifecycle-006-ac1">
+        Given ~/.config/gmux/config.json does not exist,
+        when gmux starts,
+        then it uses defaults: pollInterval=3000, notificationCooldown=300000, sound=false.
+      </criterion>
+      <criterion id="fr-lifecycle-006-ac2">
+        Given config.json contains {"sound": true, "pollInterval": 5000},
+        when gmux starts,
+        then sound is enabled and poll interval is 5 seconds.
+        notificationCooldown uses default (300000).
+      </criterion>
+      <criterion id="fr-lifecycle-006-ac3">
+        Given config.json contains invalid JSON,
+        when gmux starts,
+        then a warning is logged and defaults are used. gmux does not crash.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-lifecycle-007">
+    <title>Technology stack constraints</title>
+    <description>gmux is built with TypeScript, React + Ink for TUI rendering, and Vitest
+    for testing. These choices are fixed for Phase 1 to align with the team's expertise
+    and the proven dmux reference implementation.</description>
+    <trace>REQ-N005</trace>
+    <acceptance_criteria>
+      <criterion id="fr-lifecycle-007-ac1">
+        Given the project is set up,
+        when package.json is inspected,
+        then it lists react, ink, and typescript as dependencies, and vitest as a dev dependency.
+      </criterion>
+      <criterion id="fr-lifecycle-007-ac2">
+        Given source code is written,
+        when files are inspected,
+        then all source files are TypeScript (.ts/.tsx) and UI components use Ink/React APIs.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+</detail>

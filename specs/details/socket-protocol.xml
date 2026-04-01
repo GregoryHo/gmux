@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<detail id="socket-protocol" title="Socket Protocol">
+
+  <requirement id="fr-socket-001">
+    <title>Unix socket server</title>
+    <description>gmux listens on /tmp/gmux.sock for incoming push events.
+    Protocol is JSON-line: one JSON object per line, newline-delimited.
+    Server adds timestamp on receipt if not provided.</description>
+    <trace>REQ-F014</trace>
+    <acceptance_criteria>
+      <criterion id="fr-socket-001-ac1">
+        Given gmux starts successfully,
+        when startup completes,
+        then /tmp/gmux.sock exists and accepts connections.
+      </criterion>
+      <criterion id="fr-socket-001-ac2">
+        Given a client sends a valid JSON line to the socket,
+        when the server receives it,
+        then the event is parsed and forwarded to SessionStore.
+      </criterion>
+      <criterion id="fr-socket-001-ac3">
+        Given a client sends malformed JSON,
+        when the server receives it,
+        then the line is logged as a warning and discarded. The socket remains open.
+      </criterion>
+      <criterion id="fr-socket-001-ac4">
+        Given a client sends a partial line (no trailing newline),
+        when more data arrives,
+        then the server buffers until a complete line is received.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-socket-002">
+    <title>Event types and schema</title>
+    <description>Three event types with a flat structure. Required fields: event, session, pane.
+    Additional fields depend on event type.</description>
+    <trace>REQ-F014, REQ-F015</trace>
+    <schema>
+      <event_type name="status">
+        <description>Override heuristic status for a pane.</description>
+        <required_fields>event ("status"), session (string), pane (string)</required_fields>
+        <optional_fields>status ("idle" | "active" | "needs_attention")</optional_fields>
+        <example>{"event":"status","session":"arcforge","pane":"1.1","status":"idle"}</example>
+      </event_type>
+      <event_type name="notify">
+        <description>Push a notification to the dashboard feed.</description>
+        <required_fields>event ("notify"), session (string), pane (string)</required_fields>
+        <optional_fields>message (string)</optional_fields>
+        <example>{"event":"notify","session":"arcforge","pane":"1.1","message":"Plan complete — proceed?"}</example>
+      </event_type>
+      <event_type name="meta">
+        <description>Update session metadata (model, context usage).</description>
+        <required_fields>event ("meta"), session (string), pane (string)</required_fields>
+        <optional_fields>model (string), context_pct (number 0-100)</optional_fields>
+        <example>{"event":"meta","session":"arcforge","pane":"1.1","model":"opus-4.6","context_pct":27}</example>
+      </event_type>
+    </schema>
+    <acceptance_criteria>
+      <criterion id="fr-socket-002-ac1">
+        Given a "status" event with status "idle" for arcforge:1.1,
+        when SessionStore processes it,
+        then the status override for arcforge:1.1 is set to "idle" and takes priority over heuristics.
+      </criterion>
+      <criterion id="fr-socket-002-ac2">
+        Given a "notify" event with message "Plan complete",
+        when SessionStore processes it,
+        then a new entry appears in the notification feed with the message and current timestamp.
+      </criterion>
+      <criterion id="fr-socket-002-ac3">
+        Given a "meta" event with model and context_pct,
+        when SessionStore processes it,
+        then the detail panel for that session reflects the updated model and context percentage.
+      </criterion>
+      <criterion id="fr-socket-002-ac4">
+        Given an event with an unknown event type,
+        when the server processes it,
+        then the event is logged as a warning and discarded.
+      </criterion>
+      <criterion id="fr-socket-002-ac5">
+        Given an event missing a required field (event, session, or pane),
+        when the server validates it,
+        then the event is rejected and logged as a warning.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-socket-003">
+    <title>Hook scripts fail silently when gmux is not running</title>
+    <description>Example hook scripts shipped with gmux check for socket existence
+    before writing. If /tmp/gmux.sock does not exist, the hook exits 0 (success)
+    without error — fire and forget.</description>
+    <trace>REQ-F014</trace>
+    <acceptance_criteria>
+      <criterion id="fr-socket-003-ac1">
+        Given /tmp/gmux.sock does not exist,
+        when a hook script runs,
+        then it exits with code 0 and produces no stderr output.
+      </criterion>
+      <criterion id="fr-socket-003-ac2">
+        Given /tmp/gmux.sock exists and gmux is running,
+        when a hook script runs,
+        then it sends the event and exits with code 0.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+</detail>

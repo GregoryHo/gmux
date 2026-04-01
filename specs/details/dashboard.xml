@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<detail id="dashboard" title="Dashboard UI and Interaction">
+
+  <requirement id="fr-ui-001">
+    <title>Session list table</title>
+    <description>Top zone of the dashboard displays a navigable table of all detected
+    agent panes. Each row shows: tmux target (session:window.pane), status indicator,
+    git branch, truncated cwd, and duration.</description>
+    <trace>REQ-F002</trace>
+    <acceptance_criteria>
+      <criterion id="fr-ui-001-ac1">
+        Given 3 detected agent panes,
+        when the dashboard renders,
+        then 3 rows appear in the session table, each showing session target, status dot,
+        branch name, shortened cwd (~/G/A style), and duration since Claude process started.
+      </criterion>
+      <criterion id="fr-ui-001-ac2">
+        Given agent duration is measured from the Claude Code process start time,
+        when process has been running 2h 15m,
+        then duration column shows "2h 15m".
+      </criterion>
+      <criterion id="fr-ui-001-ac3">
+        Given the user presses j/↓ or k/↑,
+        when navigating the session list,
+        then the selection indicator (▸) moves to the next/previous row.
+      </criterion>
+      <criterion id="fr-ui-001-ac4">
+        Given status is "active", then the dot shows ●.
+        Given status is "idle", then the dot shows ○.
+        Given status is "needs_attention", then the dot shows ⚡.
+        Given status is "unknown", then the dot shows ?.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-ui-002">
+    <title>Detail panel for selected session</title>
+    <description>Middle zone shows extended info for the currently selected session:
+    Claude version, model name, context usage percentage, and last output snippet.</description>
+    <trace>REQ-F003</trace>
+    <acceptance_criteria>
+      <criterion id="fr-ui-002-ac1">
+        Given session arcforge:1.1 is selected and running Claude 2.1.87 with Opus 4.6 at 27% context,
+        when detail panel renders,
+        then it shows "arcforge:1.1 — Claude 2.1.87 · Opus 4.6 · 27% ctx".
+      </criterion>
+      <criterion id="fr-ui-002-ac2">
+        Given the selected session has a parseable last assistant output,
+        when detail panel renders,
+        then it shows "Last: " followed by the truncated snippet.
+      </criterion>
+      <criterion id="fr-ui-002-ac3">
+        Given no session is detected (empty list),
+        when detail panel renders,
+        then it shows "No agent sessions detected".
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-ui-003">
+    <title>Notification feed</title>
+    <description>Lower portion of middle zone shows recent notification events in reverse
+    chronological order with timestamps.</description>
+    <trace>REQ-F004</trace>
+    <acceptance_criteria>
+      <criterion id="fr-ui-003-ac1">
+        Given 3 notification events have occurred,
+        when notification feed renders,
+        then events appear newest-first, each with a relative timestamp (e.g., "2m ago").
+      </criterion>
+      <criterion id="fr-ui-003-ac2">
+        Given a new notification arrives,
+        when the feed updates,
+        then the new event appears at the top.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-ui-004">
+    <title>Command input with send-keys</title>
+    <description>Bottom zone provides a text input. When the user types and presses Enter,
+    the text is sent to the selected agent pane via tmux send-keys.</description>
+    <trace>REQ-F005</trace>
+    <acceptance_criteria>
+      <criterion id="fr-ui-004-ac1">
+        Given session arcforge:1.1 is selected and user types "yes" and presses Enter,
+        when Commander executes,
+        then tmux send-keys -t arcforge:1.1 "yes" Enter is invoked.
+      </criterion>
+      <criterion id="fr-ui-004-ac2">
+        Given send-keys succeeds,
+        when the UI updates,
+        then a brief "sent" indicator appears next to the input field.
+      </criterion>
+      <criterion id="fr-ui-004-ac3">
+        Given no session is selected,
+        when user presses Enter,
+        then nothing is sent and the input is ignored.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-ui-005">
+    <title>Send interrupt to selected pane</title>
+    <description>Ctrl-C sends an interrupt signal to the selected agent pane, not to gmux itself.</description>
+    <trace>REQ-F006</trace>
+    <acceptance_criteria>
+      <criterion id="fr-ui-005-ac1">
+        Given session arcforge:1.1 is selected and user presses Ctrl-C,
+        when Commander executes,
+        then tmux send-keys -t arcforge:1.1 C-c is invoked.
+      </criterion>
+      <criterion id="fr-ui-005-ac2">
+        Given no session is selected,
+        when user presses Ctrl-C,
+        then nothing happens (gmux does not quit).
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-ui-006">
+    <title>Key bindings</title>
+    <description>Dashboard keyboard navigation and action shortcuts.</description>
+    <trace>REQ-F002, REQ-F005, REQ-F006, REQ-F007, REQ-F008, REQ-F009</trace>
+    <acceptance_criteria>
+      <criterion id="fr-ui-006-ac1">↑/↓ or j/k navigates session list.</criterion>
+      <criterion id="fr-ui-006-ac2">Enter sends typed text to selected session.</criterion>
+      <criterion id="fr-ui-006-ac3">Ctrl-C sends interrupt to selected session.</criterion>
+      <criterion id="fr-ui-006-ac4">Ctrl-K kills selected tmux session (with confirmation since it's destructive).</criterion>
+      <criterion id="fr-ui-006-ac5">Ctrl-N enters session creation flow.</criterion>
+      <criterion id="fr-ui-006-ac6">Ctrl-F switches the main monitor's tmux client to the selected session.</criterion>
+      <criterion id="fr-ui-006-ac7">q or Ctrl-Q quits gmux immediately without confirmation.</criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-ui-007">
+    <title>Focus session on main monitor</title>
+    <description>Ctrl-F switches the main monitor's tmux client to view the selected session.
+    When multiple tmux clients exist, show a client picker.</description>
+    <trace>REQ-F009</trace>
+    <acceptance_criteria>
+      <criterion id="fr-ui-007-ac1">
+        Given one non-gmux tmux client exists,
+        when user presses Ctrl-F,
+        then tmux switch-client -t (selected session) is invoked on that client.
+      </criterion>
+      <criterion id="fr-ui-007-ac2">
+        Given multiple non-gmux tmux clients exist,
+        when user presses Ctrl-F,
+        then a picker appears listing available clients. User selects one, then switch-client runs.
+      </criterion>
+      <criterion id="fr-ui-007-ac3">
+        Given no non-gmux tmux clients exist,
+        when user presses Ctrl-F,
+        then a message "No tmux clients available" is shown briefly.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+</detail>
