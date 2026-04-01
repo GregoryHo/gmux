@@ -11,6 +11,8 @@ import { TmuxPoller } from "./poller.js";
 import { setupSocketServer } from "./socket-server.js";
 import { validateEvent } from "./socket-events.js";
 import { StatusOverrideStore } from "./status-overrides.js";
+import { readConversation, type ConversationEntry } from "./jsonl-reader.js";
+import { runTmux } from "./tmux.js";
 import { interruptPane, killSession, listClients, switchClient, newSession, sendLaunchCommand } from "./commander.js";
 import type { TmuxClient } from "./commander.js";
 import { Notifier } from "./notifier.js";
@@ -37,6 +39,7 @@ type UIMode =
   | { kind: "confirm-kill"; sessionName: string }
   | { kind: "client-picker"; clients: TmuxClient[] }
   | { kind: "create-session" }
+  | { kind: "expanded-detail" }
   | { kind: "flash"; message: string };
 
 export function App({ config, server }: AppProps) {
@@ -46,6 +49,9 @@ export function App({ config, server }: AppProps) {
   const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
   const [uiMode, setUIMode] = useState<UIMode>({ kind: "normal" });
   const [degraded, setDegraded] = useState(false);
+  const [conversation, setConversation] = useState<ConversationEntry[]>([]);
+  const [scrollbackContent, setScrollbackContent] = useState("");
+  const [scrollOffset, setScrollOffset] = useState(0);
   const pollerRef = useRef<TmuxPoller | null>(null);
   const overridesRef = useRef(new StatusOverrideStore());
   const prevStatusRef = useRef(new Map<string, AgentStatus>());
@@ -169,6 +175,21 @@ export function App({ config, server }: AppProps) {
 
   const selectedSession =
     sessions.length > 0 ? sessions[selectedIndex] ?? null : null;
+
+  // Fetch JSONL conversation when selected session changes
+  useEffect(() => {
+    if (!selectedSession) {
+      setConversation([]);
+      return;
+    }
+
+    let cancelled = false;
+    readConversation(selectedSession.cwd, 3).then((entries) => {
+      if (!cancelled) setConversation(entries);
+    });
+
+    return () => { cancelled = true; };
+  }, [selectedSession?.target]);
 
   const handleFocusSession = useCallback(async () => {
     if (!selectedSession) return;
@@ -310,6 +331,23 @@ export function App({ config, server }: AppProps) {
         return;
       }
 
+      // Ctrl-E: expand detail panel (scrollback relay)
+      if (key.ctrl && input === "e") {
+        if (selectedSession) {
+          setScrollOffset(0);
+          // Capture full scrollback on-demand
+          runTmux(["capture-pane", "-t", selectedSession.target, "-p", "-S", "-"])
+            .then((content) => {
+              setScrollbackContent(content);
+              setUIMode({ kind: "expanded-detail" });
+            })
+            .catch(() => {
+              setUIMode({ kind: "flash", message: "Failed to capture scrollback" });
+            });
+        }
+        return;
+      }
+
       // Ctrl-N: create session wizard
       if (key.ctrl && input === "n") {
         setUIMode({ kind: "create-session" });
@@ -323,6 +361,33 @@ export function App({ config, server }: AppProps) {
       }
     },
     { isActive: uiMode.kind === "normal" || uiMode.kind === "flash" },
+  );
+
+  // Expanded detail view keybindings
+  useInput(
+    (input, key) => {
+      if (key.escape || (key.ctrl && input === "e")) {
+        setUIMode({ kind: "normal" });
+        return;
+      }
+      if (key.upArrow || input === "k") {
+        setScrollOffset((prev) => Math.max(0, prev - 1));
+        return;
+      }
+      if (key.downArrow || input === "j") {
+        setScrollOffset((prev) => prev + 1);
+        return;
+      }
+      if (key.ctrl && input === "u") {
+        setScrollOffset((prev) => Math.max(0, prev - 10));
+        return;
+      }
+      if (key.ctrl && input === "d") {
+        setScrollOffset((prev) => prev + 10);
+        return;
+      }
+    },
+    { isActive: uiMode.kind === "expanded-detail" },
   );
 
   // Confirm-kill keybindings
@@ -385,19 +450,25 @@ export function App({ config, server }: AppProps) {
         <Text dimColor>{timeStr}</Text>
       </Box>
 
-      {/* Session List */}
+      {/* Session List — dimmed when expanded */}
       <Box borderStyle="single" flexDirection="column">
         <SessionList
           sessions={sessions}
           selectedIndex={selectedIndex}
-          dimmed={degraded}
+          dimmed={degraded || uiMode.kind === "expanded-detail"}
         />
       </Box>
 
       {/* Detail Panel + Notifications */}
       <Box borderStyle="single" flexDirection="column">
-        <DetailPanel session={selectedSession} />
-        {notifications.length > 0 ? (
+        <DetailPanel
+          session={selectedSession}
+          conversation={conversation}
+          expanded={uiMode.kind === "expanded-detail"}
+          scrollbackContent={scrollbackContent}
+          scrollOffset={scrollOffset}
+        />
+        {uiMode.kind !== "expanded-detail" && notifications.length > 0 ? (
           <NotificationFeed events={notifications} maxDisplay={5} />
         ) : null}
       </Box>

@@ -176,6 +176,35 @@ epics:
         source_requirement: "fr-notify-004"
         depends_on: ["notify-macos", "foundation-config"]
 
+  # ── Layer 5: v1.1 Improvements ────────────────────
+  - id: "epic-v1.1-improvements"
+    name: "Heuristics + Detail Panel Redesign"
+    status: "pending"
+    spec_path: "epics/epic-v1.1-improvements/epic.md"
+    worktree: null
+    depends_on: ["epic-dashboard", "epic-detection"]
+    features:
+      - id: "v1.1-heuristics"
+        name: "Generic progress word heuristics (replace Whisking/INSERT)"
+        status: "pending"
+        source_requirement: "fr-detect-003"
+        depends_on: ["detect-heuristics"]
+      - id: "v1.1-jsonl-reader"
+        name: "JSONL session file reader (CWD → project hash → conversation)"
+        status: "pending"
+        source_requirement: "fr-ui-002"
+        depends_on: ["detect-polling"]
+      - id: "v1.1-detail-compact"
+        name: "Detail panel compact view with JSONL conversation preview"
+        status: "pending"
+        source_requirement: "fr-ui-002"
+        depends_on: ["v1.1-jsonl-reader", "ui-detail-panel"]
+      - id: "v1.1-detail-expanded"
+        name: "Expanded detail view with scrollback relay (Ctrl-E)"
+        status: "pending"
+        source_requirement: "fr-ui-008"
+        depends_on: ["v1.1-detail-compact"]
+
   # ── Layer 4: Hardening ───────────────────────────
   - id: "epic-hardening"
     name: "Error Handling and Degraded Modes"
