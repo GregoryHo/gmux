@@ -1,0 +1,201 @@
+epics:
+  # ── Layer 0: Foundation ──────────────────────────
+  - id: "epic-foundation"
+    name: "Project Foundation"
+    status: "pending"
+    spec_path: "epics/epic-foundation/epic.md"
+    worktree: null
+    depends_on: []
+    features:
+      - id: "foundation-tech-stack"
+        name: "Project scaffolding (TS + React + Ink + Vitest)"
+        status: "pending"
+        source_requirement: "fr-lifecycle-007"
+        depends_on: []
+      - id: "foundation-config"
+        name: "Configuration file loader"
+        status: "pending"
+        source_requirement: "fr-lifecycle-006"
+        depends_on: ["foundation-tech-stack"]
+      - id: "foundation-startup"
+        name: "Startup sequence (PID file + socket bind)"
+        status: "pending"
+        source_requirement: "fr-lifecycle-001"
+        depends_on: ["foundation-config"]
+      - id: "foundation-shutdown"
+        name: "Shutdown sequence (cleanup + signal handling)"
+        status: "pending"
+        source_requirement: "fr-lifecycle-002"
+        depends_on: ["foundation-startup"]
+
+  # ── Layer 1: Data Sources (parallel) ─────────────
+  - id: "epic-detection"
+    name: "Agent Detection and Status"
+    status: "pending"
+    spec_path: "epics/epic-detection/epic.md"
+    worktree: null
+    depends_on: ["epic-foundation"]
+    features:
+      - id: "detect-agents"
+        name: "Detect Claude Code panes via version pattern"
+        status: "pending"
+        source_requirement: "fr-detect-001"
+        depends_on: ["foundation-startup"]
+      - id: "detect-polling"
+        name: "Poll tmux every 3s with state diff"
+        status: "pending"
+        source_requirement: "fr-detect-002"
+        depends_on: ["detect-agents"]
+      - id: "detect-heuristics"
+        name: "Status heuristics from pane content"
+        status: "pending"
+        source_requirement: "fr-detect-003"
+        depends_on: ["detect-polling"]
+      - id: "detect-metadata"
+        name: "Extract detail metadata (last output snippet)"
+        status: "pending"
+        source_requirement: "fr-detect-005"
+        depends_on: ["detect-heuristics"]
+      - id: "detect-socket-override"
+        name: "Socket events override heuristic status"
+        status: "pending"
+        source_requirement: "fr-detect-004"
+        depends_on: ["detect-heuristics", "socket-events"]
+
+  - id: "epic-socket"
+    name: "Socket Protocol"
+    status: "pending"
+    spec_path: "epics/epic-socket/epic.md"
+    worktree: null
+    depends_on: ["epic-foundation"]
+    features:
+      - id: "socket-server"
+        name: "Unix socket server with JSON-line protocol"
+        status: "pending"
+        source_requirement: "fr-socket-001"
+        depends_on: ["foundation-startup"]
+      - id: "socket-events"
+        name: "Event types and schema (status/notify/meta)"
+        status: "pending"
+        source_requirement: "fr-socket-002"
+        depends_on: ["socket-server"]
+      - id: "socket-hook-scripts"
+        name: "Example hook scripts with fail-silent behavior"
+        status: "pending"
+        source_requirement: "fr-socket-003"
+        depends_on: ["socket-events"]
+
+  # ── Layer 2: UI ──────────────────────────────────
+  - id: "epic-dashboard"
+    name: "Dashboard UI and Interaction"
+    status: "pending"
+    spec_path: "epics/epic-dashboard/epic.md"
+    worktree: null
+    depends_on: ["epic-detection", "epic-socket"]
+    features:
+      - id: "ui-session-list"
+        name: "Session list table with navigation"
+        status: "pending"
+        source_requirement: "fr-ui-001"
+        depends_on: ["detect-polling"]
+      - id: "ui-detail-panel"
+        name: "Detail panel for selected session"
+        status: "pending"
+        source_requirement: "fr-ui-002"
+        depends_on: ["ui-session-list", "detect-metadata"]
+      - id: "ui-notification-feed"
+        name: "Notification feed (reverse chronological)"
+        status: "pending"
+        source_requirement: "fr-ui-003"
+        depends_on: ["ui-session-list"]
+      - id: "ui-command-input"
+        name: "Command input with send-keys"
+        status: "pending"
+        source_requirement: "fr-ui-004"
+        depends_on: ["ui-session-list"]
+      - id: "ui-interrupt"
+        name: "Send Ctrl-C interrupt to selected pane"
+        status: "pending"
+        source_requirement: "fr-ui-005"
+        depends_on: ["ui-command-input"]
+      - id: "ui-keybindings"
+        name: "Keyboard shortcuts"
+        status: "pending"
+        source_requirement: "fr-ui-006"
+        depends_on: ["ui-command-input", "ui-interrupt"]
+      - id: "ui-focus"
+        name: "Focus session on main monitor (client picker)"
+        status: "pending"
+        source_requirement: "fr-ui-007"
+        depends_on: ["ui-keybindings"]
+
+  # ── Layer 3: Management + Notifications ──────────
+  - id: "epic-session-mgmt"
+    name: "Session Management"
+    status: "pending"
+    spec_path: "epics/epic-session-mgmt/epic.md"
+    worktree: null
+    depends_on: ["epic-dashboard"]
+    features:
+      - id: "session-create"
+        name: "Create new tmux session with agent"
+        status: "pending"
+        source_requirement: "fr-session-001"
+        depends_on: ["ui-keybindings"]
+      - id: "session-kill"
+        name: "Kill tmux session with confirmation"
+        status: "pending"
+        source_requirement: "fr-session-002"
+        depends_on: ["ui-keybindings"]
+
+  - id: "epic-notifications"
+    name: "Notifications"
+    status: "pending"
+    spec_path: "epics/epic-notifications/epic.md"
+    worktree: null
+    depends_on: ["epic-dashboard", "epic-detection"]
+    features:
+      - id: "notify-visual"
+        name: "In-dashboard visual notifications"
+        status: "pending"
+        source_requirement: "fr-notify-001"
+        depends_on: ["ui-notification-feed", "detect-heuristics"]
+      - id: "notify-macos"
+        name: "macOS native notifications"
+        status: "pending"
+        source_requirement: "fr-notify-002"
+        depends_on: ["notify-visual"]
+      - id: "notify-cooldown"
+        name: "5-minute per-session notification cooldown"
+        status: "pending"
+        source_requirement: "fr-notify-003"
+        depends_on: ["notify-macos"]
+      - id: "notify-sound"
+        name: "Optional notification sound"
+        status: "pending"
+        source_requirement: "fr-notify-004"
+        depends_on: ["notify-macos", "foundation-config"]
+
+  # ── Layer 4: Hardening ───────────────────────────
+  - id: "epic-hardening"
+    name: "Error Handling and Degraded Modes"
+    status: "pending"
+    spec_path: "epics/epic-hardening/epic.md"
+    worktree: null
+    depends_on: ["epic-dashboard", "epic-socket", "epic-detection"]
+    features:
+      - id: "hardening-tmux-degraded"
+        name: "tmux unavailable — degraded mode with auto-recovery"
+        status: "pending"
+        source_requirement: "fr-lifecycle-003"
+        depends_on: ["detect-polling"]
+      - id: "hardening-socket-degraded"
+        name: "Socket unavailable — polling-only mode"
+        status: "pending"
+        source_requirement: "fr-lifecycle-004"
+        depends_on: ["socket-server"]
+      - id: "hardening-sendkeys-failure"
+        name: "send-keys failure handling (pane gone)"
+        status: "pending"
+        source_requirement: "fr-lifecycle-005"
+        depends_on: ["ui-command-input"]
