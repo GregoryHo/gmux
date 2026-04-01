@@ -47,6 +47,15 @@ export class Notifier {
    * If the same session was notified within `config.notificationCooldown` ms,
    * the notification is silently suppressed.
    */
+  /** Remove cooldown entries for sessions that no longer exist. */
+  prune(activeSessions: Set<string>): void {
+    for (const key of this.lastNotifyTime.keys()) {
+      if (!activeSessions.has(key)) {
+        this.lastNotifyTime.delete(key);
+      }
+    }
+  }
+
   notify(session: string, message: string): void {
     const now = Date.now();
     const last = this.lastNotifyTime.get(session);

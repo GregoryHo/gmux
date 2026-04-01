@@ -1,5 +1,4 @@
 import type { Server, Socket } from "node:net";
-import type { SocketEvent } from "./socket-types.js";
 
 /**
  * Attach connection handling to an already-bound net.Server.
@@ -9,7 +8,7 @@ import type { SocketEvent } from "./socket-types.js";
  */
 export function setupSocketServer(
   server: Server,
-  onEvent: (event: SocketEvent) => void,
+  onEvent: (event: unknown) => void,
 ): void {
   server.on("connection", (socket: Socket) => {
     let buffer = "";
@@ -35,7 +34,7 @@ export function setupSocketServer(
           continue;
         }
 
-        onEvent(parsed as SocketEvent);
+        onEvent(parsed);
       }
     });
 

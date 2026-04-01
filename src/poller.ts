@@ -142,31 +142,20 @@ export class TmuxPoller extends EventEmitter {
    * and metadata extraction.
    */
   private async enrichPanes(panes: AgentPane[]): Promise<AgentSession[]> {
-    const results: AgentSession[] = [];
+    // Capture all panes in parallel — each is an independent tmux call
+    const settled = await Promise.allSettled(
+      panes.map(async (pane) => {
+        const paneContent = await capturePaneContent(pane.target);
+        const override = this._statusOverrides.get(pane.target);
+        const status = override ?? classifyStatus(paneContent);
+        const metadata = extractMetadata(paneContent);
+        return { ...pane, status, metadata, paneContent } as AgentSession;
+      }),
+    );
 
-    for (const pane of panes) {
-      let paneContent = "";
-      try {
-        paneContent = await capturePaneContent(pane.target);
-      } catch {
-        // Pane may have disappeared between list and capture — skip
-        continue;
-      }
-
-      // Socket override takes priority over heuristic classification
-      const override = this._statusOverrides.get(pane.target);
-      const status = override ?? classifyStatus(paneContent);
-      const metadata = extractMetadata(paneContent);
-
-      results.push({
-        ...pane,
-        status,
-        metadata,
-        paneContent,
-      });
-    }
-
-    return results;
+    return settled
+      .filter((r): r is PromiseFulfilledResult<AgentSession> => r.status === "fulfilled")
+      .map((r) => r.value);
   }
 
   /**

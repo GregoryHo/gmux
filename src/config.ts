@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { isNodeError } from "./utils.js";
 
 export interface GmuxConfig {
   /** Interval between tmux polls in ms */
@@ -51,6 +52,3 @@ export async function loadConfig(
   }
 }
 
-function isNodeError(err: unknown): err is NodeJS.ErrnoException {
-  return err instanceof Error && "code" in err;
-}

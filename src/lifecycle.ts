@@ -1,5 +1,6 @@
 import { readFile, writeFile, unlink } from "node:fs/promises";
 import { createServer, type Server } from "node:net";
+import { isNodeError } from "./utils.js";
 
 export const PID_PATH = "/tmp/gmux.pid";
 export const SOCKET_PATH = "/tmp/gmux.sock";
@@ -141,8 +142,4 @@ async function safeUnlink(path: string): Promise<void> {
   } catch {
     // ignore — file may not exist
   }
-}
-
-function isNodeError(err: unknown): err is NodeJS.ErrnoException {
-  return err instanceof Error && "code" in err;
 }

@@ -5,9 +5,8 @@ import { resolve } from "node:path";
 import { homedir } from "node:os";
 import type { Server } from "node:net";
 import type { GmuxConfig } from "./config.js";
-import type { AgentSession } from "./types.js";
-import type { AgentStatus } from "./types.js";
-import type { SocketEvent } from "./socket-types.js";
+import type { AgentSession, AgentStatus } from "./types.js";
+import { sessionNameFromTarget } from "./utils.js";
 import { TmuxPoller } from "./poller.js";
 import { setupSocketServer } from "./socket-server.js";
 import { validateEvent } from "./socket-events.js";
@@ -62,7 +61,7 @@ export function App({ config, server }: AppProps) {
   // Socket server setup (skip when server is null — socket unavailable mode)
   useEffect(() => {
     if (!server) return;
-    setupSocketServer(server, (raw: SocketEvent) => {
+    setupSocketServer(server, (raw: unknown) => {
       const event = validateEvent(raw);
       if (!event) return;
 
@@ -98,9 +97,7 @@ export function App({ config, server }: AppProps) {
     });
 
     poller.on("remove", (target: string) => {
-      // Extract session name from target "session:window.pane"
-      const colonIdx = target.indexOf(":");
-      const name = colonIdx > 0 ? target.substring(0, colonIdx) : target;
+      const name = sessionNameFromTarget(target);
       setNotifications((prev) =>
         addNotification(prev, createNotification(name, "session ended")),
       );
@@ -136,10 +133,16 @@ export function App({ config, server }: AppProps) {
       }
       prevStatusRef.current = newMap;
 
-      setSessions(updated);
+      // Only update sessions if something actually changed
+      setSessions((prev) => {
+        if (prev.length !== updated.length) return updated;
+        const changed = updated.some((s, i) =>
+          s.target !== prev[i]?.target || s.status !== prev[i]?.status || s.paneContent !== prev[i]?.paneContent
+        );
+        return changed ? updated : prev;
+      });
 
-      // On successful update, check if degraded state recovered
-      setDegraded(poller.degraded);
+      if (poller.degraded !== degraded) setDegraded(poller.degraded);
     });
 
     poller.on("error", (err: Error) => {
@@ -256,9 +259,7 @@ export function App({ config, server }: AppProps) {
       // Remove the pane from the session list immediately
       setSessions((prev) => prev.filter((s) => s.target !== target));
 
-      // Extract session name from target
-      const colonIdx = target.indexOf(":");
-      const name = colonIdx > 0 ? target.substring(0, colonIdx) : target;
+      const name = sessionNameFromTarget(target);
       setNotifications((prev) =>
         addNotification(prev, createNotification(name, "session ended")),
       );
@@ -397,9 +398,7 @@ export function App({ config, server }: AppProps) {
       <Box borderStyle="single" flexDirection="column">
         <DetailPanel session={selectedSession} />
         {notifications.length > 0 ? (
-          <Box marginTop={0}>
-            <NotificationFeed events={notifications} maxDisplay={5} />
-          </Box>
+          <NotificationFeed events={notifications} maxDisplay={5} />
         ) : null}
       </Box>
 

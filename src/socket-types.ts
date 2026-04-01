@@ -1,18 +1,17 @@
+import type { AgentStatus } from "./types.js";
+
 export type SocketEventType = "status" | "notify" | "meta";
 
-export type AgentStatus = "idle" | "active" | "needs_attention";
+/** Socket status values — excludes "unknown" which is heuristic-only. */
+export type SocketAgentStatus = Exclude<AgentStatus, "unknown">;
 
 export interface SocketEvent {
   event: SocketEventType;
   session: string;
   pane: string;
-  /** Present on 'status' events */
-  status?: AgentStatus;
-  /** Present on 'notify' events */
+  status?: SocketAgentStatus;
   message?: string;
-  /** Present on 'meta' events */
   model?: string;
-  /** Present on 'meta' events — context window usage percentage */
   context_pct?: number;
 }
 

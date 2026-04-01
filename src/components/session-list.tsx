@@ -4,8 +4,6 @@ import type { AgentSession, AgentStatus } from "../types.js";
 export interface SessionListProps {
   sessions: AgentSession[];
   selectedIndex: number;
-  onSelect?: (index: number) => void;
-  /** When true, renders all sessions with dimmed/warning styling (degraded mode). */
   dimmed?: boolean;
 }
 
