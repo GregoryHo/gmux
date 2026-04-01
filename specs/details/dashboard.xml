@@ -34,25 +34,70 @@
   </requirement>
 
   <requirement id="fr-ui-002">
-    <title>Detail panel for selected session</title>
-    <description>Middle zone shows extended info for the currently selected session:
-    Claude version, model name, context usage percentage, and last output snippet.</description>
-    <trace>REQ-F003</trace>
+    <title>Detail panel — compact view with JSONL conversation preview</title>
+    <description>Compact view (default) shows: metadata header line (target, version, model,
+    context %), followed by a conversation flow preview sourced from the JSONL session file.
+    The JSONL file is located by mapping the pane's CWD to a Claude project hash
+    (~/.claude/projects/&lt;hash&gt;/*.jsonl). Shows last 2-3 user/assistant exchanges.</description>
+    <trace>REQ-F003, REQ-F017</trace>
     <acceptance_criteria>
       <criterion id="fr-ui-002-ac1">
         Given session arcforge:1.1 is selected and running Claude 2.1.87 with Opus 4.6 at 27% context,
-        when detail panel renders,
-        then it shows "arcforge:1.1 — Claude 2.1.87 · Opus 4.6 · 27% ctx".
+        when detail panel renders in compact mode,
+        then it shows "arcforge:1.1 — Claude 2.1.87 · Opus 4.6 · 27% ctx" as the header.
       </criterion>
       <criterion id="fr-ui-002-ac2">
-        Given the selected session has a parseable last assistant output,
-        when detail panel renders,
-        then it shows "Last: " followed by the truncated snippet.
+        Given the session's JSONL file contains recent user and assistant messages,
+        when detail panel renders in compact mode,
+        then it shows the last 2-3 exchanges as conversation flow
+        (e.g., "You: fix the auth bug" / "AI: I'll update the middleware...").
       </criterion>
       <criterion id="fr-ui-002-ac3">
         Given no session is detected (empty list),
         when detail panel renders,
         then it shows "No agent sessions detected".
+      </criterion>
+      <criterion id="fr-ui-002-ac4">
+        Given the JSONL file cannot be found or read,
+        when detail panel renders in compact mode,
+        then it shows the metadata header only, with "No conversation data" below.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-ui-008">
+    <title>Detail panel — expanded view with scrollback relay</title>
+    <description>Ctrl-E toggles the detail panel into an expanded view that relays the full
+    tmux scrollback history via capture-pane -S - (captured on-demand, not during polling).
+    The view is scrollable with j/k (1 line) and Ctrl-U/Ctrl-D (10 lines). Esc closes.
+    When expanded, the session list is dimmed and the notification feed is hidden to
+    maximize vertical space.</description>
+    <trace>REQ-F003, REQ-F018</trace>
+    <acceptance_criteria>
+      <criterion id="fr-ui-008-ac1">
+        Given a session is selected and user presses Ctrl-E,
+        when the expanded view opens,
+        then the full scrollback content is displayed (captured via tmux capture-pane -S -).
+      </criterion>
+      <criterion id="fr-ui-008-ac2">
+        Given the expanded view is open,
+        when user presses j/k or arrow keys,
+        then the view scrolls by 1 line. Ctrl-U/Ctrl-D scrolls by 10 lines.
+      </criterion>
+      <criterion id="fr-ui-008-ac3">
+        Given the expanded view is open,
+        when user presses Esc,
+        then the view closes and returns to normal mode with compact detail panel.
+      </criterion>
+      <criterion id="fr-ui-008-ac4">
+        Given the expanded view is open,
+        when the view renders,
+        then the session list is dimmed and the notification feed is hidden.
+      </criterion>
+      <criterion id="fr-ui-008-ac5">
+        Given the expanded scrollback capture fails (tmux error),
+        when the expanded view tries to render,
+        then it shows "Failed to capture scrollback" and does not crash.
       </criterion>
     </acceptance_criteria>
   </requirement>
@@ -121,15 +166,16 @@
   <requirement id="fr-ui-006">
     <title>Key bindings</title>
     <description>Dashboard keyboard navigation and action shortcuts.</description>
-    <trace>REQ-F002, REQ-F005, REQ-F006, REQ-F007, REQ-F008, REQ-F009</trace>
+    <trace>REQ-F002, REQ-F005, REQ-F006, REQ-F007, REQ-F008, REQ-F009, REQ-F018</trace>
     <acceptance_criteria>
       <criterion id="fr-ui-006-ac1">↑/↓ or j/k navigates session list.</criterion>
       <criterion id="fr-ui-006-ac2">Enter sends typed text to selected session.</criterion>
       <criterion id="fr-ui-006-ac3">Ctrl-C sends interrupt to selected session.</criterion>
       <criterion id="fr-ui-006-ac4">Ctrl-K kills selected tmux session (with confirmation since it's destructive).</criterion>
       <criterion id="fr-ui-006-ac5">Ctrl-N enters session creation flow.</criterion>
-      <criterion id="fr-ui-006-ac6">Ctrl-F switches the main monitor's tmux client to the selected session.</criterion>
-      <criterion id="fr-ui-006-ac7">q or Ctrl-Q quits gmux immediately without confirmation.</criterion>
+      <criterion id="fr-ui-006-ac6">Ctrl-E toggles expanded detail view (full scrollback relay).</criterion>
+      <criterion id="fr-ui-006-ac7">Ctrl-F switches the main monitor's tmux client to the selected session.</criterion>
+      <criterion id="fr-ui-006-ac8">q or Ctrl-Q quits gmux immediately without confirmation.</criterion>
     </acceptance_criteria>
   </requirement>
 

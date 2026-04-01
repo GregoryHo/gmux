@@ -12,10 +12,19 @@ A CLI dashboard that runs on a second monitor, providing a bird's-eye view of al
 
 **Agent detection (Phase 1 — Claude Code only):** `pane_current_command` matching `/^\d+\.\d+\.\d+$/` — Claude Code's process name is its version number.
 
-**Status detection: Hybrid (heuristic + socket override)**
+**Status detection: Generic heuristics + socket override**
 1. Socket push (highest priority) — Claude Code hooks send status directly
-2. Pane content heuristics (fallback) — parse `tmux capture-pane` output for known patterns
+2. Pane content heuristics (fallback) — generic progress word detection (inspired by dmux):
+   - `esc to interrupt/cancel` → active (most reliable cross-agent signal)
+   - Generic progress words (thinking, crunching, building, running, testing...) → active
+   - `-- INSERT --` + no active signals → idle
+   - No recognized pattern → unknown
 3. Unknown — show `?` when no signal matches
+
+**Detail panel: Hybrid data sources**
+1. Compact view — reads JSONL session files for structured conversation preview (last 2-3 user/assistant exchanges)
+2. Expanded view (Ctrl-E) — relays full tmux scrollback via `capture-pane -S -` (only when user expands)
+3. Metadata (model, context %) — parsed from captured pane status bar section
 
 ---
 
@@ -69,7 +78,8 @@ A CLI dashboard that runs on a second monitor, providing a bird's-eye view of al
 │                                                         │
 ├─────────────────────────────────────────────────────────┤
 │  arcforge:1.1 — Claude 2.1.87 · Opus 4.6 · 27% ctx    │
-│  Last: "I'll update the hook configuration now..."      │
+│  You: "fix the auth bug"                                │
+│  AI:  "I'll update the middleware to validate..."       │
 │                                                         │
 │  ⚡ workspace:1 completed plan — proceed?    2m ago     │
 │  ⚡ settings needs input — permission dialog  5m ago    │
@@ -84,7 +94,7 @@ A CLI dashboard that runs on a second monitor, providing a bird's-eye view of al
 | Zone | Component | Description |
 |---|---|---|
 | **Top: Session Table** | `<SessionList>` | Navigable rows. Each row = one detected agent pane. Shows session name, status dot, git branch, truncated cwd, duration. Arrow keys to select |
-| **Middle: Detail + Notifications** | `<DetailPanel>` + `<NotificationFeed>` | Top half shows selected session's extended info (model, context %, last output snippet). Bottom half shows recent notification events with timestamps |
+| **Middle: Detail + Notifications** | `<DetailPanel>` + `<NotificationFeed>` | Compact: JSONL-based conversation flow preview (You/AI exchanges). Expanded (Ctrl-E): full scrollback relay. Below: notification events with timestamps |
 | **Bottom: Input** | `<CommandInput>` | Text input. Typing sends to selected pane via `tmux send-keys`. Prefix commands: `:new`, `:kill`, `:focus` |
 
 ### Key Bindings
@@ -96,6 +106,7 @@ A CLI dashboard that runs on a second monitor, providing a bird's-eye view of al
 | `Ctrl-C` | Send interrupt to selected session (not quit gmux) |
 | `Ctrl-K` | Kill selected session |
 | `Ctrl-N` | Create new session |
+| `Ctrl-E` | Toggle expanded detail view (full scrollback relay) |
 | `Ctrl-F` | Focus selected session on main monitor |
 | `q` or `Ctrl-Q` | Quit gmux |
 
@@ -146,15 +157,24 @@ tmux list-panes -a -F                   echo '{"event":"stop",
           Dashboard  Notifier  Commander
 ```
 
-### Status Resolution (Hybrid C)
+### Status Resolution
 
-1. Socket says "idle"? → trust it (highest priority)
-2. No socket data? → fall back to heuristic:
-   - `/-- INSERT --/` → idle
-   - `/Whisking|thinking/` → active
-   - `/[Y\/n]|proceed\?/` → needs_attention
-   - no recognized pattern → unknown (show `?`)
+1. Socket says status? → trust it (highest priority)
+2. No socket data? → fall back to generic heuristics:
+   - `/esc to (interrupt|cancel|stop|abort)/` → active (most reliable, cross-agent)
+   - Generic progress words (`thinking|crunching|building|running|testing|...`) → active
+   - `/\[Y\/n\]|proceed\?/` → needs_attention
+   - `/-- INSERT --/` + no active signals → idle
+   - No recognized pattern → unknown (show `?`)
 3. Status changed? → emit to Notifier
+
+### Detail Panel Data Sources
+
+- **Compact view (default):** Read JSONL session file → show last 2-3 user/assistant exchanges as conversation flow
+- **Expanded view (Ctrl-E):** `tmux capture-pane -S -` → full scrollback history, scrollable with j/k
+- **Metadata line:** Model + context % parsed from captured pane status bar
+
+JSONL file mapping: tmux pane CWD → project hash (replace `/` with `-`) → `~/.claude/projects/<hash>/*.jsonl` → most recent file
 
 ### State Diff Logic
 
@@ -259,7 +279,7 @@ afterAll:   tmux -L gmux-test kill-server
 
 - REQ-F001: Detect Claude Code instances in tmux by matching `pane_current_command` against version pattern `/^\d+\.\d+\.\d+$/`
 - REQ-F002: Display session list with: tmux session name, status (active/idle/needs_attention), git branch, cwd, duration
-- REQ-F003: Show detail panel for selected session: model, context %, last output snippet
+- REQ-F003: Show detail panel — compact: JSONL conversation flow preview (last 2-3 exchanges); expanded (Ctrl-E): full scrollback relay via `capture-pane -S -`
 - REQ-F004: Show notification feed with timestamped events
 - REQ-F005: Send text messages to selected agent pane via `tmux send-keys`
 - REQ-F006: Send interrupt (Ctrl-C) to selected agent pane
@@ -272,7 +292,9 @@ afterAll:   tmux -L gmux-test kill-server
 - REQ-F013: Poll tmux every ~3s for session state
 - REQ-F014: Accept push events via Unix socket at `/tmp/gmux.sock` (JSON-line protocol)
 - REQ-F015: Socket events override polling heuristics (higher priority)
-- REQ-F016: Status heuristics from pane content: INSERT→idle, Whisking→active, [Y/n]→needs_attention
+- REQ-F016: Status heuristics — generic progress word detection: `esc to interrupt`→active, progress words (thinking, building, running...)→active, `INSERT`+no active→idle, `[Y/n]`→needs_attention
+- REQ-F017: JSONL session file reading — map tmux pane CWD to Claude project hash, read last entries for conversation preview
+- REQ-F018: Expanded detail view — Ctrl-E toggles scrollable full scrollback relay, j/k scroll, Esc close
 
 ### Non-Functional Requirements
 

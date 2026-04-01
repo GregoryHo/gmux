@@ -2,7 +2,7 @@
 <spec>
   <meta>
     <title>gmux — Global Agent Dashboard</title>
-    <version>1.0</version>
+    <version>1.1</version>
     <source>docs/plans/2026-04-01-gmux-dashboard-design.md</source>
     <phase>1 (Claude Code only)</phase>
   </meta>

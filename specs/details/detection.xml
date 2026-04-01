@@ -51,18 +51,26 @@
   </requirement>
 
   <requirement id="fr-detect-003">
-    <title>Heuristic status detection from pane content</title>
+    <title>Generic heuristic status detection from pane content</title>
     <description>When no socket override exists for a pane, TmuxPoller captures pane content
-    via tmux capture-pane and classifies status using regex heuristics.</description>
+    via tmux capture-pane and classifies status using generic progress word detection
+    (inspired by dmux's cross-agent heuristic approach). Priority order:
+    1. needs_attention (highest) — user action required
+    2. active — "esc to interrupt" or generic progress words detected
+    3. idle — "-- INSERT --" present with NO active signals
+    4. unknown — fallback</description>
     <trace>REQ-F016</trace>
     <acceptance_criteria>
       <criterion id="fr-detect-003-ac1">
-        Given captured pane content contains "-- INSERT --",
+        Given captured pane content contains "esc to interrupt" or "esc to cancel",
         when status heuristic runs,
-        then status is classified as "idle".
+        then status is classified as "active" (highest-reliability cross-agent signal).
       </criterion>
       <criterion id="fr-detect-003-ac2">
-        Given captured pane content contains "Whisking" or "thinking",
+        Given captured pane content contains generic progress words
+        (thinking, crunching, building, running, testing, searching, analyzing,
+        writing, reading, editing, generating, compiling, scanning, processing,
+        planning, reasoning, reviewing, executing, loading),
         when status heuristic runs,
         then status is classified as "active".
       </criterion>
@@ -72,6 +80,12 @@
         then status is classified as "needs_attention".
       </criterion>
       <criterion id="fr-detect-003-ac4">
+        Given captured pane content contains "-- INSERT --" and NO active signals
+        (no "esc to interrupt", no progress words),
+        when status heuristic runs,
+        then status is classified as "idle".
+      </criterion>
+      <criterion id="fr-detect-003-ac5">
         Given captured pane content matches no known pattern,
         when status heuristic runs,
         then status is classified as "unknown" and displayed as "?".
@@ -104,21 +118,22 @@
   </requirement>
 
   <requirement id="fr-detect-005">
-    <title>Extract detail metadata from pane content</title>
-    <description>For the selected session, parse the last assistant text block from captured
-    pane content (content between the last thinking indicator and the input prompt) to show
-    as the "last output snippet" in the detail panel.</description>
+    <title>Extract metadata from pane status bar</title>
+    <description>Parse model name and context usage percentage from the captured pane
+    content's status bar region (below the ❯ prompt). This metadata is displayed in
+    the detail panel header line. Conversation content is sourced from JSONL (see fr-ui-002),
+    NOT from pane content parsing.</description>
     <trace>REQ-F003</trace>
     <acceptance_criteria>
       <criterion id="fr-detect-005-ac1">
-        Given a captured pane with visible Claude output,
-        when detail extraction runs,
-        then the last assistant text block is extracted and truncated to fit the detail panel.
+        Given a captured pane with a status bar containing model and context info,
+        when metadata extraction runs,
+        then model name and context percentage are extracted correctly.
       </criterion>
       <criterion id="fr-detect-005-ac2">
-        Given a captured pane with no parseable assistant block,
-        when detail extraction runs,
-        then the detail panel shows "No recent output" instead of raw terminal noise.
+        Given a captured pane with no parseable status bar,
+        when metadata extraction runs,
+        then model and contextPct return null (graceful degradation).
       </criterion>
     </acceptance_criteria>
   </requirement>
