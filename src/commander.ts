@@ -109,3 +109,31 @@ export function buildSwitchClientArgs(clientName: string, sessionTarget: string)
 export async function switchClient(clientName: string, sessionTarget: string): Promise<void> {
   await runTmuxCommand(buildSwitchClientArgs(clientName, sessionTarget));
 }
+
+/**
+ * Build the args array for creating a new detached tmux session.
+ */
+export function buildNewSessionArgs(name: string, dir: string): string[] {
+  return ["new-session", "-d", "-s", name, "-c", dir];
+}
+
+/**
+ * Create a new detached tmux session with the given name and working directory.
+ */
+export async function newSession(name: string, dir: string): Promise<void> {
+  await runTmuxCommand(buildNewSessionArgs(name, dir));
+}
+
+/**
+ * Build the args array for sending a launch command to a session.
+ */
+export function buildSendLaunchCommandArgs(name: string, cmd: string): string[] {
+  return ["send-keys", "-t", name, cmd, "Enter"];
+}
+
+/**
+ * Send a launch command to a tmux session (types the command and presses Enter).
+ */
+export async function sendLaunchCommand(name: string, cmd: string): Promise<void> {
+  await runTmuxCommand(buildSendLaunchCommandArgs(name, cmd));
+}

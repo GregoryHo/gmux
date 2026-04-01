@@ -12,3 +12,6 @@ export type { CommandInputProps } from "./command-input.js";
 
 export { ClientPicker } from "./client-picker.js";
 export type { ClientPickerProps } from "./client-picker.js";
+
+export { SessionCreator } from "./session-creator.js";
+export type { SessionCreatorProps } from "./session-creator.js";

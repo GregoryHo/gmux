@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Box, Text, useApp, useInput } from "ink";
+import { stat } from "node:fs/promises";
+import { resolve } from "node:path";
+import { homedir } from "node:os";
 import type { Server } from "node:net";
 import type { GmuxConfig } from "./config.js";
 import type { AgentSession } from "./types.js";
@@ -9,7 +12,7 @@ import { TmuxPoller } from "./poller.js";
 import { setupSocketServer } from "./socket-server.js";
 import { validateEvent } from "./socket-events.js";
 import { StatusOverrideStore } from "./status-overrides.js";
-import { interruptPane, killSession, listClients, switchClient } from "./commander.js";
+import { interruptPane, killSession, listClients, switchClient, newSession, sendLaunchCommand } from "./commander.js";
 import type { TmuxClient } from "./commander.js";
 import {
   SessionList,
@@ -17,6 +20,7 @@ import {
   NotificationFeed,
   CommandInput,
   ClientPicker,
+  SessionCreator,
   createNotification,
   addNotification,
 } from "./components/index.js";
@@ -32,6 +36,7 @@ type UIMode =
   | { kind: "normal" }
   | { kind: "confirm-kill"; sessionName: string }
   | { kind: "client-picker"; clients: TmuxClient[] }
+  | { kind: "create-session" }
   | { kind: "flash"; message: string };
 
 export function App({ config, server }: AppProps) {
@@ -180,6 +185,59 @@ export function App({ config, server }: AppProps) {
     }
   }, [selectedSession]);
 
+  const handleCreateSession = useCallback(
+    async (dir: string, name: string, cmd: string) => {
+      // Expand ~ to home directory
+      const expandedDir = dir.startsWith("~")
+        ? resolve(homedir(), dir.slice(1).replace(/^\//, ""))
+        : resolve(dir);
+
+      // Validate directory exists
+      try {
+        const st = await stat(expandedDir);
+        if (!st.isDirectory()) {
+          setUIMode({ kind: "flash", message: `Not a directory: ${dir}` });
+          return;
+        }
+      } catch {
+        setUIMode({ kind: "flash", message: `Directory not found: ${dir}` });
+        return;
+      }
+
+      // Create session
+      try {
+        await newSession(name, expandedDir);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("duplicate") || msg.includes("already")) {
+          setUIMode({
+            kind: "flash",
+            message: `Session '${name}' already exists`,
+          });
+        } else {
+          setUIMode({
+            kind: "flash",
+            message: `Failed to create session: ${msg}`,
+          });
+        }
+        return;
+      }
+
+      // Send launch command
+      try {
+        await sendLaunchCommand(name, cmd);
+      } catch {
+        // Session was created but command failed — still show success
+      }
+
+      setUIMode({ kind: "flash", message: `Created session ${name}` });
+      setNotifications((prev) =>
+        addNotification(prev, createNotification(name, "session created")),
+      );
+    },
+    [],
+  );
+
   // Main keybindings
   useInput(
     (input, key) => {
@@ -224,12 +282,9 @@ export function App({ config, server }: AppProps) {
         return;
       }
 
-      // Ctrl-N: create session placeholder
+      // Ctrl-N: create session wizard
       if (key.ctrl && input === "n") {
-        setUIMode({
-          kind: "flash",
-          message: "Session creation not yet implemented",
-        });
+        setUIMode({ kind: "create-session" });
         return;
       }
 
@@ -309,6 +364,15 @@ export function App({ config, server }: AppProps) {
             Kill session {uiMode.sessionName}? (y/n)
           </Text>
         </Box>
+      ) : null}
+
+      {uiMode.kind === "create-session" ? (
+        <SessionCreator
+          onCreate={(dir, name, cmd) => {
+            void handleCreateSession(dir, name, cmd);
+          }}
+          onCancel={() => setUIMode({ kind: "normal" })}
+        />
       ) : null}
 
       {uiMode.kind === "client-picker" ? (
