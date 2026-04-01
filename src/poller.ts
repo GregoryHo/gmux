@@ -20,12 +20,15 @@ export interface PollerEvents {
  *
  * Emits events when panes are added or removed, and on each update cycle.
  */
+export const DEGRADED_POLL_INTERVAL = 5000;
+
 export class TmuxPoller extends EventEmitter {
   private interval: number;
   private timer: ReturnType<typeof setInterval> | null = null;
   private previousTargets: Map<string, AgentSession> = new Map();
   private _sessions: AgentSession[] = [];
   private _polling = false;
+  private _degraded = false;
   private _statusOverrides: StatusOverrideStore;
 
   constructor(pollInterval: number = 3000, statusOverrides?: StatusOverrideStore) {
@@ -49,6 +52,11 @@ export class TmuxPoller extends EventEmitter {
     return this.timer !== null;
   }
 
+  /** Whether the poller is in degraded mode (tmux unreachable). */
+  get degraded(): boolean {
+    return this._degraded;
+  }
+
   /** Start polling. No-op if already running. */
   start(): void {
     if (this.timer !== null) return;
@@ -66,8 +74,22 @@ export class TmuxPoller extends EventEmitter {
   }
 
   /**
+   * Restart the polling timer with a new interval.
+   * Used internally to switch between normal and degraded intervals.
+   */
+  private restartTimer(newInterval: number): void {
+    if (this.timer === null) return; // not running, nothing to restart
+    clearInterval(this.timer);
+    this.timer = setInterval(() => void this.poll(), newInterval);
+  }
+
+  /**
    * Execute a single poll cycle.
    * Public for testing — normally called internally by start().
+   *
+   * On failure, retries once after 1 second. If retry also fails,
+   * enters degraded mode (polls every 5s, keeps last-known sessions).
+   * On success after degraded, restores normal interval.
    */
   async poll(): Promise<void> {
     if (this._polling) return; // prevent overlapping polls
@@ -78,8 +100,38 @@ export class TmuxPoller extends EventEmitter {
       const sessions = await this.enrichPanes(panes);
       this.diffAndEmit(sessions);
       this._sessions = sessions;
-    } catch (err) {
-      this.emit("error", err instanceof Error ? err : new Error(String(err)));
+
+      // If we were degraded and this poll succeeded, recover
+      if (this._degraded) {
+        this._degraded = false;
+        this.restartTimer(this.interval);
+      }
+    } catch (firstErr) {
+      // Retry once after 1 second
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const panes = await listAgentPanes();
+        const sessions = await this.enrichPanes(panes);
+        this.diffAndEmit(sessions);
+        this._sessions = sessions;
+
+        // Retry succeeded — recover if degraded
+        if (this._degraded) {
+          this._degraded = false;
+          this.restartTimer(this.interval);
+        }
+      } catch (retryErr) {
+        // Both attempts failed — enter degraded mode
+        if (!this._degraded) {
+          this._degraded = true;
+          this.restartTimer(DEGRADED_POLL_INTERVAL);
+        }
+        // Keep last-known sessions (don't clear this._sessions)
+        this.emit(
+          "error",
+          retryErr instanceof Error ? retryErr : new Error(String(retryErr)),
+        );
+      }
     } finally {
       this._polling = false;
     }

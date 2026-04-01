@@ -15,12 +15,12 @@ async function main() {
     process.exit(1);
   }
 
-  registerSignalHandlers(result.server);
+  registerSignalHandlers(result.server ?? undefined);
 
   const { waitUntilExit } = render(<App config={config} server={result.server} />);
 
   await waitUntilExit();
-  await cleanup(result.server);
+  await cleanup(result.server ?? undefined);
 }
 
 main();

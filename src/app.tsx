@@ -29,7 +29,7 @@ import type { NotificationEvent } from "./components/index.js";
 
 export interface AppProps {
   config: GmuxConfig;
-  server: Server;
+  server: Server | null;
 }
 
 /** UI mode for overlays. */
@@ -46,6 +46,7 @@ export function App({ config, server }: AppProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
   const [uiMode, setUIMode] = useState<UIMode>({ kind: "normal" });
+  const [degraded, setDegraded] = useState(false);
   const pollerRef = useRef<TmuxPoller | null>(null);
   const overridesRef = useRef(new StatusOverrideStore());
   const prevStatusRef = useRef(new Map<string, AgentStatus>());
@@ -58,8 +59,9 @@ export function App({ config, server }: AppProps) {
     return () => clearTimeout(timer);
   }, [uiMode]);
 
-  // Socket server setup
+  // Socket server setup (skip when server is null — socket unavailable mode)
   useEffect(() => {
+    if (!server) return;
     setupSocketServer(server, (raw: SocketEvent) => {
       const event = validateEvent(raw);
       if (!event) return;
@@ -135,10 +137,14 @@ export function App({ config, server }: AppProps) {
       prevStatusRef.current = newMap;
 
       setSessions(updated);
+
+      // On successful update, check if degraded state recovered
+      setDegraded(poller.degraded);
     });
 
     poller.on("error", (err: Error) => {
       console.error(`gmux: poll error: ${err.message}`);
+      setDegraded(poller.degraded);
     });
 
     poller.start();
@@ -242,6 +248,23 @@ export function App({ config, server }: AppProps) {
     [],
   );
 
+  // Handle sendKeys failure: remove pane from sessions, add notification
+  const handleSendError = useCallback((target: string, error: Error) => {
+    const msg = error.message || "";
+    // Check if the error indicates the pane/session is gone
+    if (msg.includes("can't find") || msg.includes("no such") || msg.includes("not found") || msg.includes("failed")) {
+      // Remove the pane from the session list immediately
+      setSessions((prev) => prev.filter((s) => s.target !== target));
+
+      // Extract session name from target
+      const colonIdx = target.indexOf(":");
+      const name = colonIdx > 0 ? target.substring(0, colonIdx) : target;
+      setNotifications((prev) =>
+        addNotification(prev, createNotification(name, "session ended")),
+      );
+    }
+  }, []);
+
   // Main keybindings
   useInput(
     (input, key) => {
@@ -331,6 +354,24 @@ export function App({ config, server }: AppProps) {
 
   return (
     <Box flexDirection="column">
+      {/* Degraded mode banner */}
+      {degraded ? (
+        <Box paddingX={1}>
+          <Text color="yellow" bold>
+            {"⚠ tmux not reachable — retrying every 5s"}
+          </Text>
+        </Box>
+      ) : null}
+
+      {/* Socket unavailable banner */}
+      {server === null ? (
+        <Box paddingX={1}>
+          <Text color="yellow" bold>
+            {"⚠ socket unavailable — polling only"}
+          </Text>
+        </Box>
+      ) : null}
+
       {/* Header */}
       <Box borderStyle="single" paddingX={1} justifyContent="space-between">
         <Box gap={1}>
@@ -348,6 +389,7 @@ export function App({ config, server }: AppProps) {
         <SessionList
           sessions={sessions}
           selectedIndex={selectedIndex}
+          dimmed={degraded}
         />
       </Box>
 
@@ -415,6 +457,7 @@ export function App({ config, server }: AppProps) {
         <CommandInput
           selectedTarget={selectedSession?.target ?? null}
           isActive={uiMode.kind === "normal"}
+          onError={handleSendError}
         />
       </Box>
     </Box>

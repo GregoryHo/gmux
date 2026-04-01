@@ -70,7 +70,7 @@ function bindSocket(): Promise<Server> {
 }
 
 export interface StartupResult {
-  server: Server;
+  server: Server | null;
 }
 
 /**
@@ -78,7 +78,7 @@ export interface StartupResult {
  * 1. Check for stale PID/socket from previous crash → clean up
  * 2. If a live instance exists → exit with error
  * 3. Write PID file
- * 4. Bind Unix socket
+ * 4. Bind Unix socket (non-EADDRINUSE errors result in server: null)
  */
 export async function startup(): Promise<StartupResult> {
   const cleaned = await cleanStaleFiles();
@@ -90,8 +90,17 @@ export async function startup(): Promise<StartupResult> {
 
   await writePidFile();
 
-  const server = await bindSocket();
-  return { server };
+  try {
+    const server = await bindSocket();
+    return { server };
+  } catch (err: unknown) {
+    // EADDRINUSE means another instance is likely running — rethrow
+    if (isNodeError(err) && err.code === "EADDRINUSE") {
+      throw err;
+    }
+    // Other socket errors → degrade to socket-unavailable mode
+    return { server: null };
+  }
 }
 
 /**
@@ -132,4 +141,8 @@ async function safeUnlink(path: string): Promise<void> {
   } catch {
     // ignore — file may not exist
   }
+}
+
+function isNodeError(err: unknown): err is NodeJS.ErrnoException {
+  return err instanceof Error && "code" in err;
 }

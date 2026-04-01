@@ -7,6 +7,8 @@ export interface CommandInputProps {
   selectedTarget: string | null;
   /** Callback invoked after a successful send. */
   onSend?: (text: string) => void;
+  /** Callback invoked when sendKeys fails (e.g. pane disappeared). */
+  onError?: (target: string, error: Error) => void;
   /** Whether the input is active (receives keystrokes). Defaults to true. */
   isActive?: boolean;
 }
@@ -19,6 +21,7 @@ export interface CommandInputProps {
 export function CommandInput({
   selectedTarget,
   onSend,
+  onError,
   isActive = true,
 }: CommandInputProps) {
   const [text, setText] = useState("");
@@ -39,10 +42,11 @@ export function CommandInput({
       setSentIndicator(true);
       onSend?.(text);
       setText("");
-    } catch {
-      // Command failed — silently ignore (pane may have disappeared)
+    } catch (err) {
+      // Command failed — notify parent (pane may have disappeared)
+      onError?.(selectedTarget, err instanceof Error ? err : new Error(String(err)));
     }
-  }, [selectedTarget, text, onSend]);
+  }, [selectedTarget, text, onSend, onError]);
 
   useInput(
     (input, key) => {

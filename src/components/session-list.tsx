@@ -5,6 +5,8 @@ export interface SessionListProps {
   sessions: AgentSession[];
   selectedIndex: number;
   onSelect?: (index: number) => void;
+  /** When true, renders all sessions with dimmed/warning styling (degraded mode). */
+  dimmed?: boolean;
 }
 
 /** Map agent status to a display dot character. */
@@ -97,7 +99,7 @@ export function extractBranch(session: AgentSession): string {
  * SessionList component - navigable list of agent sessions.
  * Navigation is handled by the parent via selectedIndex prop.
  */
-export function SessionList({ sessions, selectedIndex }: SessionListProps) {
+export function SessionList({ sessions, selectedIndex, dimmed = false }: SessionListProps) {
   if (sessions.length === 0) {
     return (
       <Box paddingX={1}>
@@ -118,11 +120,11 @@ export function SessionList({ sessions, selectedIndex }: SessionListProps) {
 
         return (
           <Box key={session.target} gap={1} paddingX={1}>
-            <Text>{indicator}</Text>
-            <Text>{dot}</Text>
-            <Text bold>{session.sessionName}</Text>
+            <Text dimColor={dimmed}>{indicator}</Text>
+            <Text dimColor={dimmed} color={dimmed ? "yellow" : undefined}>{dot}</Text>
+            <Text bold dimColor={dimmed}>{session.sessionName}</Text>
             <Text dimColor>{label}</Text>
-            {branch ? <Text color="cyan">{branch}</Text> : null}
+            {branch ? <Text color="cyan" dimColor={dimmed}>{branch}</Text> : null}
             <Text dimColor>{cwd}</Text>
             <Text dimColor>{session.command}</Text>
           </Box>
