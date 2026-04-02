@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import type { AgentSession } from "../types.js";
 import type { ConversationEntry } from "../jsonl-reader.js";
 import { AnsiText } from "../ansi-renderer.js";
+import { parseAnsiSequences } from "ansi-sequence-parser";
 
 export interface DetailPanelProps {
   session: AgentSession | null;
@@ -72,7 +73,9 @@ function MetadataHeader({
   );
 }
 
-const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
+function isVisuallyEmpty(line: string): boolean {
+  return parseAnsiSequences(line).map(t => t.value).join("").trim() === "";
+}
 
 function LiveView({
   content,
@@ -90,7 +93,7 @@ function LiveView({
   const lines = content.split("\n");
 
   // Trim trailing visually-empty lines (blank area between content and status bar)
-  while (lines.length > 0 && lines[lines.length - 1].replace(ANSI_RE, "").trim() === "") {
+  while (lines.length > 0 && isVisuallyEmpty(lines[lines.length - 1])) {
     lines.pop();
   }
 
