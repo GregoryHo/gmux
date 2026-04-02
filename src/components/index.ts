@@ -15,3 +15,6 @@ export type { ClientPickerProps } from "./client-picker.js";
 
 export { SessionCreator } from "./session-creator.js";
 export type { SessionCreatorProps } from "./session-creator.js";
+
+export { Header } from "./header.js";
+export type { HeaderProps } from "./header.js";
