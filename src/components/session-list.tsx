@@ -9,6 +9,15 @@ export interface SessionListProps {
   searchQuery?: string;
 }
 
+export function statusColor(status: AgentStatus): { color?: string; dimColor?: boolean } {
+  switch (status) {
+    case "active": return { color: "green" };
+    case "idle": return { dimColor: true };
+    case "needs_attention": return { color: "yellow" };
+    default: return { color: "red", dimColor: true };
+  }
+}
+
 function statusDot(status: AgentStatus): string {
   switch (status) {
     case "active":
@@ -133,7 +142,7 @@ export function SessionList({
         return (
           <Box key={session.target} gap={1} paddingX={1}>
             <Text dimColor={dimmed}>{indicator}</Text>
-            <Text dimColor={dimmed} color={dimmed ? "yellow" : undefined}>{dot}</Text>
+            <Text {...(dimmed ? { dimColor: true, color: "yellow" } : statusColor(session.status))}>{dot}</Text>
             <Text bold dimColor={dimmed}>{session.sessionName}</Text>
             <Text dimColor>{label}</Text>
             {branch ? <Text color="cyan" dimColor={dimmed}>{branch}</Text> : null}

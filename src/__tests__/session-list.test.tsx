@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render } from "ink-testing-library";
-import { SessionList } from "../components/session-list.js";
+import { SessionList, statusColor } from "../components/session-list.js";
 import { truncateCwd, formatDuration } from "../components/session-list.js";
 import type { AgentSession } from "../types.js";
 
@@ -218,5 +218,53 @@ describe("SessionList with searchQuery", () => {
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("ArcForge");
+  });
+});
+
+describe("statusColor", () => {
+  it("returns green for active status", () => {
+    expect(statusColor("active")).toEqual({ color: "green" });
+  });
+
+  it("returns dimColor for idle status", () => {
+    expect(statusColor("idle")).toEqual({ dimColor: true });
+  });
+
+  it("returns yellow for needs_attention status", () => {
+    expect(statusColor("needs_attention")).toEqual({ color: "yellow" });
+  });
+
+  it("returns dim red for unknown status", () => {
+    expect(statusColor("unknown")).toEqual({ color: "red", dimColor: true });
+  });
+});
+
+describe("SessionList status dot symbols", () => {
+  it("renders ● dot for active status", () => {
+    const { lastFrame } = render(
+      <SessionList sessions={[makeSession({ status: "active" })]} selectedIndex={0} />,
+    );
+    expect(lastFrame()).toContain("●");
+  });
+
+  it("renders ○ dot for idle status", () => {
+    const { lastFrame } = render(
+      <SessionList sessions={[makeSession({ status: "idle" })]} selectedIndex={0} />,
+    );
+    expect(lastFrame()).toContain("○");
+  });
+
+  it("renders ⚡ dot for needs_attention status", () => {
+    const { lastFrame } = render(
+      <SessionList sessions={[makeSession({ status: "needs_attention" })]} selectedIndex={0} />,
+    );
+    expect(lastFrame()).toContain("⚡");
+  });
+
+  it("renders ? dot for unknown status", () => {
+    const { lastFrame } = render(
+      <SessionList sessions={[makeSession({ status: "unknown" })]} selectedIndex={0} />,
+    );
+    expect(lastFrame()).toContain("?");
   });
 });
