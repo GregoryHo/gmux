@@ -5,9 +5,10 @@ export interface SessionListProps {
   sessions: AgentSession[];
   selectedIndex: number;
   dimmed?: boolean;
+  maxHeight?: number;
+  searchQuery?: string;
 }
 
-/** Map agent status to a display dot character. */
 function statusDot(status: AgentStatus): string {
   switch (status) {
     case "active":
@@ -21,7 +22,6 @@ function statusDot(status: AgentStatus): string {
   }
 }
 
-/** Map agent status to a display label. */
 function statusLabel(status: AgentStatus): string {
   switch (status) {
     case "active":
@@ -35,10 +35,6 @@ function statusLabel(status: AgentStatus): string {
   }
 }
 
-/**
- * Truncate a file path to a compact form: ~/G/A/project style.
- * Replaces home dir with ~, abbreviates intermediate directories to first char.
- */
 export function truncateCwd(cwd: string): string {
   const home = process.env["HOME"] ?? "";
   let display = cwd;
@@ -50,8 +46,6 @@ export function truncateCwd(cwd: string): string {
   const parts = display.split("/");
   if (parts.length <= 2) return display;
 
-  // Keep first element (~ or empty for /) and last element full,
-  // abbreviate everything in between
   const abbreviated = parts.map((part, i) => {
     if (i === 0 || i === parts.length - 1) return part;
     return part.charAt(0).toUpperCase();
@@ -60,9 +54,6 @@ export function truncateCwd(cwd: string): string {
   return abbreviated.join("/");
 }
 
-/**
- * Format a duration from seconds to human-readable string.
- */
 export function formatDuration(seconds: number): string {
   if (seconds < 60) return `${Math.floor(seconds)}s`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
@@ -72,19 +63,12 @@ export function formatDuration(seconds: number): string {
   return `${hours}h${mins}m`;
 }
 
-/**
- * Extract a git branch name from pane content if present.
- * Looks for common branch display patterns.
- */
 export function extractBranch(session: AgentSession): string {
-  // Try to find branch from pane content — common patterns:
-  // "on branch feat/foo", "main", "feat/bar" at a prompt
   const branchMatch = session.paneContent.match(
     /(?:on branch |branch[:\s]+)([^\s,)]+)/i,
   );
   if (branchMatch) return branchMatch[1];
 
-  // Fall back to looking for git-like patterns in the cwd or content
   const gitMatch = session.paneContent.match(
     /\b(main|master|develop|feat\/[^\s]+|fix\/[^\s]+|feature\/[^\s]+)\b/,
   );
@@ -93,23 +77,53 @@ export function extractBranch(session: AgentSession): string {
   return "";
 }
 
-/**
- * SessionList component - navigable list of agent sessions.
- * Navigation is handled by the parent via selectedIndex prop.
- */
-export function SessionList({ sessions, selectedIndex, dimmed = false }: SessionListProps) {
-  if (sessions.length === 0) {
+export function SessionList({
+  sessions,
+  selectedIndex,
+  dimmed = false,
+  maxHeight,
+  searchQuery,
+}: SessionListProps) {
+  const filtered = searchQuery
+    ? sessions.filter((s) =>
+        s.sessionName.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    : sessions;
+
+  if (filtered.length === 0) {
     return (
       <Box paddingX={1}>
-        <Text dimColor>No agent sessions detected</Text>
+        <Text dimColor>
+          {searchQuery ? "No matching sessions" : "No agent sessions detected"}
+        </Text>
       </Box>
     );
   }
 
+  let visibleSessions = filtered;
+  let showUpIndicator = false;
+  let showDownIndicator = false;
+
+  if (maxHeight && filtered.length > maxHeight) {
+    const halfWindow = Math.floor(maxHeight / 2);
+    let start = Math.max(0, selectedIndex - halfWindow);
+    const end = Math.min(filtered.length, start + maxHeight);
+    if (end === filtered.length) {
+      start = Math.max(0, end - maxHeight);
+    }
+    visibleSessions = filtered.slice(start, end);
+    showUpIndicator = start > 0;
+    showDownIndicator = end < filtered.length;
+  }
+
   return (
     <Box flexDirection="column">
-      {sessions.map((session, index) => {
-        const isSelected = index === selectedIndex;
+      {showUpIndicator ? (
+        <Box paddingX={1}><Text dimColor>▲ more</Text></Box>
+      ) : null}
+      {visibleSessions.map((session) => {
+        const actualIndex = sessions.indexOf(session);
+        const isSelected = actualIndex === selectedIndex;
         const indicator = isSelected ? "▸" : " ";
         const dot = statusDot(session.status);
         const label = statusLabel(session.status);
@@ -128,6 +142,9 @@ export function SessionList({ sessions, selectedIndex, dimmed = false }: Session
           </Box>
         );
       })}
+      {showDownIndicator ? (
+        <Box paddingX={1}><Text dimColor>▼ more</Text></Box>
+      ) : null}
     </Box>
   );
 }

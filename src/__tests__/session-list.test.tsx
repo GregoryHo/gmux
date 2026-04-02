@@ -154,3 +154,69 @@ describe("formatDuration", () => {
     expect(formatDuration(5400)).toBe("1h30m");
   });
 });
+
+describe("SessionList with maxHeight", () => {
+  it("limits visible rows when sessions exceed maxHeight", () => {
+    const sessions = Array.from({ length: 10 }, (_, i) =>
+      makeSession({ target: `s${i}:1.0`, sessionName: `session${i}` }),
+    );
+    const { lastFrame } = render(
+      <SessionList sessions={sessions} selectedIndex={0} maxHeight={5} />,
+    );
+    const frame = lastFrame() ?? "";
+    // Should NOT show all 10 session names
+    const matchCount = sessions.filter((s) => frame.includes(s.sessionName)).length;
+    expect(matchCount).toBeLessThanOrEqual(5);
+  });
+
+  it("shows scroll indicators when overflowing", () => {
+    const sessions = Array.from({ length: 10 }, (_, i) =>
+      makeSession({ target: `s${i}:1.0`, sessionName: `session${i}` }),
+    );
+    const { lastFrame } = render(
+      <SessionList sessions={sessions} selectedIndex={3} maxHeight={5} />,
+    );
+    const frame = lastFrame() ?? "";
+    // When selected is in the middle, both indicators may appear
+    expect(frame).toMatch(/▲|▼/);
+  });
+});
+
+describe("SessionList with searchQuery", () => {
+  it("filters sessions by name", () => {
+    const sessions = [
+      makeSession({ target: "a:1.0", sessionName: "arcforge" }),
+      makeSession({ target: "w:1.0", sessionName: "workspace" }),
+      makeSession({ target: "s:1.0", sessionName: "settings" }),
+    ];
+    const { lastFrame } = render(
+      <SessionList sessions={sessions} selectedIndex={0} searchQuery="arc" />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("arcforge");
+    expect(frame).not.toContain("workspace");
+    expect(frame).not.toContain("settings");
+  });
+
+  it("shows no matching message when search has no results", () => {
+    const sessions = [
+      makeSession({ target: "a:1.0", sessionName: "arcforge" }),
+    ];
+    const { lastFrame } = render(
+      <SessionList sessions={sessions} selectedIndex={0} searchQuery="zzz" />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("No matching sessions");
+  });
+
+  it("is case-insensitive", () => {
+    const sessions = [
+      makeSession({ target: "a:1.0", sessionName: "ArcForge" }),
+    ];
+    const { lastFrame } = render(
+      <SessionList sessions={sessions} selectedIndex={0} searchQuery="arcforge" />,
+    );
+    const frame = lastFrame() ?? "";
+    expect(frame).toContain("ArcForge");
+  });
+});
