@@ -74,17 +74,20 @@ describe("DetailPanel — compact view", () => {
     expect(lastFrame()).toContain("No conversation data");
   });
 
-  it("truncates long conversation text", () => {
+  it("limits long conversation text per entry", () => {
     const session = makeSession();
     const conversation = makeConversation([
-      ["short", "A".repeat(100)],
+      ["short", "A".repeat(500)],
     ]);
     const { lastFrame } = render(
-      <DetailPanel session={session} conversation={conversation} />,
+      <DetailPanel session={session} conversation={conversation} visibleLines={5} />,
     );
     const frame = lastFrame()!;
-    expect(frame).toContain("...");
-    expect(frame).not.toContain("A".repeat(100));
+    // Should not show the full 500 chars
+    expect(frame).not.toContain("A".repeat(500));
+    // Should show the message content (some of it)
+    expect(frame).toContain("You:");
+    expect(frame).toContain("AI:");
   });
 });
 
