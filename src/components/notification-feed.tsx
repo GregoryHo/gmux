@@ -16,6 +16,8 @@ export interface NotificationFeedProps {
   events: NotificationEvent[];
   /** Maximum events to display. Defaults to 5. */
   maxDisplay?: number;
+  /** Maximum height in lines — overrides maxDisplay if smaller. */
+  maxHeight?: number;
 }
 
 /** Maximum number of events to keep in the store. */
@@ -69,12 +71,14 @@ export function formatRelativeTime(timestamp: number, now?: number): string {
 export function NotificationFeed({
   events,
   maxDisplay = 5,
+  maxHeight,
 }: NotificationFeedProps) {
   if (events.length === 0) {
     return null;
   }
 
-  const displayed = events.slice(0, maxDisplay);
+  const limit = maxHeight ? Math.min(maxDisplay, maxHeight) : maxDisplay;
+  const displayed = events.slice(0, limit);
 
   return (
     <Box flexDirection="column" paddingX={1}>

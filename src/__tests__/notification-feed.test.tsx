@@ -137,3 +137,29 @@ describe("addNotification", () => {
     expect(result[0].sessionName).toBe("overflow");
   });
 });
+
+describe("NotificationFeed with maxHeight", () => {
+  it("limits displayed events to maxHeight", () => {
+    const events = Array.from({ length: 10 }, (_, i) =>
+      createNotification(`session${i}`, `event ${i}`),
+    );
+    const { lastFrame } = render(
+      <NotificationFeed events={events} maxHeight={3} />,
+    );
+    const output = lastFrame() ?? "";
+    const lines = output.split("\n").filter((l) => l.includes("⚡"));
+    expect(lines.length).toBeLessThanOrEqual(3);
+  });
+
+  it("uses maxDisplay when maxHeight is not set", () => {
+    const events = Array.from({ length: 10 }, (_, i) =>
+      createNotification(`session${i}`, `event ${i}`),
+    );
+    const { lastFrame } = render(
+      <NotificationFeed events={events} maxDisplay={4} />,
+    );
+    const output = lastFrame() ?? "";
+    const lines = output.split("\n").filter((l) => l.includes("⚡"));
+    expect(lines.length).toBeLessThanOrEqual(4);
+  });
+});
