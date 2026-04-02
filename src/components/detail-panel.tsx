@@ -72,18 +72,28 @@ function MetadataHeader({
   );
 }
 
+const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
+
 function LiveView({
   content,
   frozen,
   scrollOffset,
   visibleLines,
+  panelWidth,
 }: {
   content: string;
   frozen: boolean;
   scrollOffset: number;
   visibleLines: number;
+  panelWidth: number;
 }) {
   const lines = content.split("\n");
+
+  // Trim trailing visually-empty lines (blank area between content and status bar)
+  while (lines.length > 0 && lines[lines.length - 1].replace(ANSI_RE, "").trim() === "") {
+    lines.pop();
+  }
+
   const totalLines = lines.length;
 
   let displayLines: string[];
@@ -91,14 +101,13 @@ function LiveView({
     const clampedOffset = Math.min(scrollOffset, Math.max(0, totalLines - visibleLines));
     displayLines = lines.slice(clampedOffset, clampedOffset + visibleLines);
   } else {
-    // Auto-scroll to bottom
     displayLines = lines.slice(Math.max(0, totalLines - visibleLines));
   }
 
   return (
     <Box flexDirection="column" overflowX="hidden">
       {displayLines.map((line, i) => (
-        <Box key={i} overflowX="hidden">
+        <Box key={i} width={panelWidth} overflowX="hidden">
           <AnsiText text={line || " "} />
         </Box>
       ))}
@@ -178,6 +187,7 @@ export function DetailPanel({
           frozen={frozen}
           scrollOffset={scrollOffset}
           visibleLines={visibleLines - 1}
+          panelWidth={Math.max(20, terminalWidth - 4)}
         />
       ) : (
         <ConvView

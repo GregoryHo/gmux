@@ -482,7 +482,7 @@ export function App({ config, server, hooksConfigured }: AppProps) {
         </Box>
       ) : null}
 
-      <Box borderStyle="single" flexDirection="column"
+      <Box borderStyle="single" flexDirection="column" overflow="hidden"
         height={detailFrozen ? focusHeight : heights.detail + 2}>
         <DetailPanel
           session={selectedSession}
