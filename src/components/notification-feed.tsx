@@ -66,6 +66,17 @@ export function formatRelativeTime(timestamp: number, now?: number): string {
 }
 
 /**
+ * Returns color props for a notification message based on its urgency type.
+ */
+export function urgencyColor(message: string): { color?: string; dimColor?: boolean } {
+  const lower = message.toLowerCase();
+  if (lower.includes("needs input") || lower.includes("attention")) return { color: "yellow" };
+  if (lower.includes("finished") || lower.includes("completed")) return { color: "green" };
+  if (lower.includes("session ended") || lower.includes("killed")) return { color: "red", dimColor: true };
+  return { dimColor: true };
+}
+
+/**
  * NotificationFeed component — shows recent events in reverse chronological order.
  */
 export function NotificationFeed({
@@ -82,14 +93,17 @@ export function NotificationFeed({
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      {displayed.map((event) => (
-        <Box key={event.id} gap={1}>
-          <Text>⚡</Text>
-          <Text bold>{event.sessionName}</Text>
-          <Text>{event.message}</Text>
-          <Text dimColor>— {formatRelativeTime(event.timestamp)}</Text>
-        </Box>
-      ))}
+      {displayed.map((event) => {
+        const colorProps = urgencyColor(event.message);
+        return (
+          <Box key={event.id} gap={1}>
+            <Text {...colorProps}>⚡</Text>
+            <Text bold>{event.sessionName}</Text>
+            <Text {...colorProps}>{event.message}</Text>
+            <Text dimColor>— {formatRelativeTime(event.timestamp)}</Text>
+          </Box>
+        );
+      })}
     </Box>
   );
 }
