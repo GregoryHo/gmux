@@ -27,4 +27,26 @@ describe("SearchInput", () => {
     const output = lastFrame() ?? "";
     expect(output).toContain("_");
   });
+
+  it("renders match count when matchCount and totalCount are provided", () => {
+    const { lastFrame } = render(
+      <SearchInput
+        query="arc"
+        onChange={() => {}}
+        onCancel={() => {}}
+        matchCount={2}
+        totalCount={5}
+      />,
+    );
+    const output = lastFrame() ?? "";
+    expect(output).toContain("2/5");
+  });
+
+  it("does not render match count when props are omitted", () => {
+    const { lastFrame } = render(
+      <SearchInput query="arc" onChange={() => {}} onCancel={() => {}} />,
+    );
+    const output = lastFrame() ?? "";
+    expect(output).not.toContain("/5");
+  });
 });
