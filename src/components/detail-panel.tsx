@@ -1,21 +1,32 @@
 import { Box, Text } from "ink";
 import type { AgentSession } from "../types.js";
 import type { ConversationEntry } from "../jsonl-reader.js";
+import { AnsiText } from "../ansi-renderer.js";
 
 export interface DetailPanelProps {
   session: AgentSession | null;
-  /** Recent conversation entries from JSONL (compact view). */
+  source: "live" | "conv";
+  frozen: boolean;
+  /** Live terminal content for LIVE mode. */
+  liveContent?: string;
+  /** Recent conversation entries from JSONL (CONV mode). */
   conversation?: ConversationEntry[];
-  /** When true, show full scrollback content instead of compact view. */
-  expanded?: boolean;
-  /** Full scrollback content for expanded view. */
-  scrollbackContent?: string;
-  /** Scroll offset for expanded view (lines from top). */
+  /** Scroll offset (lines from top when frozen). */
   scrollOffset?: number;
-  /** Visible lines in expanded view. */
+  /** Visible lines in the panel. */
   visibleLines?: number;
   /** Terminal width for text wrapping. */
   terminalWidth?: number;
+  /** Whether the tmux pane is still alive. */
+  paneAlive?: boolean;
+}
+
+/**
+ * Returns the mode indicator string for the current source/frozen state.
+ */
+function modeIndicator(source: "live" | "conv", frozen: boolean): string {
+  const label = source === "live" ? "LIVE" : "CONV";
+  return frozen ? `[${label} ⏸]` : `[${label}]`;
 }
 
 /**
@@ -40,58 +51,71 @@ function fitText(text: string, maxLines: number, lineWidth: number): string {
   return lines.join("\n") || text.slice(0, lineWidth - 3) + "...";
 }
 
-function MetadataHeader({ session }: { session: AgentSession }) {
+function MetadataHeader({
+  session,
+  source,
+  frozen,
+}: {
+  session: AgentSession;
+  source: "live" | "conv";
+  frozen: boolean;
+}) {
   const parts: string[] = [session.target];
   if (session.command) parts.push(`Claude ${session.command}`);
   if (session.metadata.model) parts.push(session.metadata.model);
   if (session.metadata.contextPct !== null) parts.push(`${session.metadata.contextPct}% ctx`);
-  return <Text>{parts.join(" \u00B7 ")}</Text>;
+  return (
+    <Box justifyContent="space-between">
+      <Text>{parts.join(" \u00B7 ")}</Text>
+      <Text dimColor>{modeIndicator(source, frozen)}</Text>
+    </Box>
+  );
 }
 
-export function DetailPanel({
-  session,
-  conversation = [],
-  expanded = false,
-  scrollbackContent,
-  scrollOffset = 0,
-  visibleLines = 20,
-  terminalWidth = 80,
-}: DetailPanelProps) {
-  if (!session) {
-    return (
-      <Box paddingX={1}>
-        <Text dimColor>No agent sessions detected</Text>
-      </Box>
-    );
-  }
+function LiveView({
+  content,
+  frozen,
+  scrollOffset,
+  visibleLines,
+}: {
+  content: string;
+  frozen: boolean;
+  scrollOffset: number;
+  visibleLines: number;
+}) {
+  const lines = content.split("\n");
+  const totalLines = lines.length;
 
-  // === Expanded view: full scrollback relay ===
-  if (expanded && scrollbackContent !== undefined) {
-    const lines = scrollbackContent.split("\n");
-    const totalLines = lines.length;
+  let displayLines: string[];
+  if (frozen) {
     const clampedOffset = Math.min(scrollOffset, Math.max(0, totalLines - visibleLines));
-    const visible = lines.slice(clampedOffset, clampedOffset + visibleLines);
-
-    return (
-      <Box flexDirection="column" paddingX={1}>
-        <Box justifyContent="space-between">
-          <Text bold>{session.sessionName} — Full Transcript</Text>
-          <Text dimColor>
-            {clampedOffset + 1}-{Math.min(clampedOffset + visibleLines, totalLines)} of {totalLines} · j/k scroll · Esc close
-          </Text>
-        </Box>
-        {visible.map((line, i) => (
-          <Text key={clampedOffset + i}>{line || " "}</Text>
-        ))}
-      </Box>
-    );
+    displayLines = lines.slice(clampedOffset, clampedOffset + visibleLines);
+  } else {
+    // Auto-scroll to bottom
+    displayLines = lines.slice(Math.max(0, totalLines - visibleLines));
   }
 
-  // === Compact view: metadata + JSONL conversation preview ===
+  return (
+    <Box flexDirection="column">
+      {displayLines.map((line, i) => (
+        <AnsiText key={i} text={line || " "} />
+      ))}
+    </Box>
+  );
+}
+
+function ConvView({
+  conversation,
+  visibleLines,
+  terminalWidth,
+}: {
+  conversation: ConversationEntry[];
+  visibleLines: number;
+  terminalWidth: number;
+}) {
   // Available width: terminal width minus padding (2) and borders (2) and label prefix ("You: " = 5)
   const lineWidth = Math.max(40, terminalWidth - 9);
-  // Budget: visible lines minus 1 for metadata header
-  const lineBudget = (visibleLines ?? 20) - 1;
+  const lineBudget = visibleLines;
 
   // Select entries that fit within the line budget, newest first (they're already newest-last)
   const visibleEntries: Array<{ role: string; display: string }> = [];
@@ -105,24 +129,60 @@ export function DetailPanel({
     linesUsed += entryLines;
   }
 
+  if (visibleEntries.length === 0) {
+    return <Text dimColor>No conversation data</Text>;
+  }
+
+  return (
+    <Box flexDirection="column">
+      {visibleEntries.map((entry, i) => (
+        <Box key={i} gap={1}>
+          <Text color={entry.role === "user" ? "yellow" : "cyan"} bold>
+            {entry.role === "user" ? "You:" : "AI:"}
+          </Text>
+          <Text dimColor={entry.role === "assistant"}>{entry.display}</Text>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
+export function DetailPanel({
+  session,
+  source,
+  frozen,
+  liveContent,
+  conversation = [],
+  scrollOffset = 0,
+  visibleLines = 20,
+  terminalWidth = 80,
+  paneAlive = true,
+}: DetailPanelProps) {
+  if (!session) {
+    return (
+      <Box paddingX={1}>
+        <Text dimColor>No agent sessions detected</Text>
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column" paddingX={1}>
-      <MetadataHeader session={session} />
-      {visibleEntries.length > 0 ? (
-        <Box flexDirection="column">
-          {visibleEntries.map((entry, i) => (
-            <Box key={i} gap={1}>
-              <Text color={entry.role === "user" ? "yellow" : "cyan"} bold>
-                {entry.role === "user" ? "You:" : "AI:"}
-              </Text>
-              <Text dimColor={entry.role === "assistant"}>
-                {entry.display}
-              </Text>
-            </Box>
-          ))}
-        </Box>
+      <MetadataHeader session={session} source={source} frozen={frozen} />
+      {!paneAlive ? <Text dimColor italic>session ended</Text> : null}
+      {source === "live" ? (
+        <LiveView
+          content={liveContent ?? ""}
+          frozen={frozen}
+          scrollOffset={scrollOffset}
+          visibleLines={visibleLines - 1}
+        />
       ) : (
-        <Text dimColor>No conversation data</Text>
+        <ConvView
+          conversation={conversation}
+          visibleLines={visibleLines - 1}
+          terminalWidth={terminalWidth}
+        />
       )}
     </Box>
   );

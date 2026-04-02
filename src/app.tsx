@@ -444,9 +444,10 @@ export function App({ config, server, hooksConfigured }: AppProps) {
         height={isExpanded ? focusHeight : heights.detail + 2}>
         <DetailPanel
           session={selectedSession}
+          source={isExpanded ? "live" : "conv"}
+          frozen={isExpanded}
+          liveContent={scrollbackContent}
           conversation={conversation}
-          expanded={isExpanded}
-          scrollbackContent={scrollbackContent}
           scrollOffset={scrollOffset}
           visibleLines={isExpanded ? focusHeight - 2 : heights.detail}
           terminalWidth={cols}
