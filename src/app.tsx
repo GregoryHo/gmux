@@ -258,6 +258,25 @@ export function App({ config, server }: AppProps) {
   const isExpanded = uiMode.kind === "expanded-detail";
   const searchActive = searchQuery !== null;
 
+  // Arrow-key navigation — active during search so users can select filtered results
+  useInput(
+    (_input, key) => {
+      if (key.upArrow) {
+        setSelectedIndex((prev) =>
+          sessions.length === 0 ? 0 : (prev - 1 + sessions.length) % sessions.length,
+        );
+        return;
+      }
+      if (key.downArrow) {
+        setSelectedIndex((prev) =>
+          sessions.length === 0 ? 0 : (prev + 1) % sessions.length,
+        );
+      }
+    },
+    { isActive: !isExpanded && uiMode.kind !== "confirm-kill" },
+  );
+
+  // Overview keybindings (actions + j/k nav + search trigger)
   useInput(
     (input, key) => {
       if (input === "q" || (key.ctrl && input === "q")) {
@@ -265,18 +284,18 @@ export function App({ config, server }: AppProps) {
         return;
       }
 
-      if (input === "/" && !searchActive) {
+      if (input === "/") {
         setSearchQuery("");
         return;
       }
 
-      if (key.upArrow || input === "k") {
+      if (input === "k") {
         setSelectedIndex((prev) =>
           sessions.length === 0 ? 0 : (prev - 1 + sessions.length) % sessions.length,
         );
         return;
       }
-      if (key.downArrow || input === "j") {
+      if (input === "j") {
         setSelectedIndex((prev) =>
           sessions.length === 0 ? 0 : (prev + 1) % sessions.length,
         );

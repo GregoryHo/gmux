@@ -66,8 +66,9 @@ export function CommandInput({
         return;
       if (key.tab) return;
 
-      // Append printable characters
       if (input) {
+        // "/" with empty text is the search trigger — let App handle it
+        if (input === "/" && text === "") return;
         setText((prev) => prev + input);
       }
     },
