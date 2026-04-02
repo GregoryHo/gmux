@@ -228,7 +228,7 @@ Extend existing test files. New test file only for `--setup-hooks` CLI logic.
 
 ### Functional Requirements
 
-- REQ-F019: Detail panel LIVE mode — capture-pane -e -p every ~1s for selected pane, auto-scroll to bottom
+- REQ-F019: Detail panel LIVE mode — capture-pane -e -p every 1s (hardcoded) for selected pane, auto-scroll to bottom. ANSI escape sequences parsed into Ink colored Text components (not stripped)
 - REQ-F020: Detail panel CONV mode — JSONL conversation preview via existing readConversation, refreshes every poll cycle
 - REQ-F021: Tab toggles detail source between LIVE and CONV
 - REQ-F022: Ctrl-E freezes detail content (either source), starts from bottom, j/k + Ctrl-U/D scroll, Esc unfreezes
@@ -243,8 +243,9 @@ Extend existing test files. New test file only for `--setup-hooks` CLI logic.
 - REQ-F031: Detail panel mode indicator in header ([LIVE], [CONV], [LIVE ⏸], [CONV ⏸])
 - REQ-F032: Hook detection at startup — read ~/.claude/settings.json, check for gmux hook entries
 - REQ-F033: Header warning ⚠ hooks when hooks not configured
-- REQ-F034: gmux --setup-hooks CLI command — writes Stop hook entries to ~/.claude/settings.json (user scope)
+- REQ-F034: gmux --setup-hooks CLI command — writes Stop + Notification hook entries to ~/.claude/settings.json (user scope)
 - REQ-F035: Fix hook scripts — replace $TMUX_PANE with tmux display-message for correct session/pane target
+- REQ-F036: Notification hook — Claude Code Notification event sends needs_attention status via socket for instant detection
 
 ### Non-Functional Requirements
 
@@ -254,7 +255,8 @@ Extend existing test files. New test file only for `--setup-hooks` CLI logic.
 
 ### Constraints
 
-- capture-pane -e preserves ANSI escape sequences — Ink Text component may need to handle or strip them
+- capture-pane -e preserves ANSI escape sequences — must be parsed into Ink Text color props (use ansi-sequence-parser or ink-ansi)
+- Live capture interval hardcoded at 1s — not configurable (YAGNI)
 - Identity-based selection changes the j/k navigation contract — all useInput handlers must be updated
 - --setup-hooks must resolve script paths to absolute based on gmux install location
 - Hook scripts depend on tmux display-message being available (requires running inside tmux)

@@ -2,7 +2,7 @@
 <spec>
   <meta>
     <title>gmux — Global Agent Dashboard</title>
-    <version>1.1</version>
+    <version>1.2</version>
     <source>docs/plans/2026-04-01-gmux-dashboard-design.md</source>
     <phase>1 (Claude Code only)</phase>
   </meta>
@@ -40,5 +40,8 @@
     <detail_ref file="details/socket-protocol.xml" title="Socket Protocol" />
     <detail_ref file="details/notifications.xml" title="Notifications" />
     <detail_ref file="details/lifecycle.xml" title="Process Lifecycle and Error Handling" />
+    <detail_ref file="details/detail-panel-v2.xml" title="Detail Panel Redesign (v1.2)" />
+    <detail_ref file="details/ux-polish.xml" title="UX Polish (v1.2)" />
+    <detail_ref file="details/hooks-v2.xml" title="Hook Integration (v1.2)" />
   </details>
 </spec>
