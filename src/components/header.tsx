@@ -5,14 +5,15 @@ export interface HeaderProps {
   activeCount: number;
   degraded: boolean;
   socketAvailable: boolean;
+  hooksConfigured?: boolean;
   focusSession?: string;
 }
 
-export function Header({ sessionCount, activeCount, degraded, socketAvailable, focusSession }: HeaderProps) {
+export function Header({ sessionCount, activeCount, degraded, socketAvailable, hooksConfigured, focusSession }: HeaderProps) {
   const now = new Date();
   const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
-  const hasWarning = degraded || !socketAvailable;
+  const hasWarning = degraded || !socketAvailable || hooksConfigured === false;
 
   if (focusSession) {
     return (
@@ -29,6 +30,7 @@ export function Header({ sessionCount, activeCount, degraded, socketAvailable, f
   let warningText = "";
   if (degraded) warningText = "⚠ tmux";
   else if (!socketAvailable) warningText = "⚠ socket";
+  else if (hooksConfigured === false) warningText = "⚠ hooks";
 
   return (
     <Box paddingX={1} justifyContent="space-between">

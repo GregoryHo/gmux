@@ -57,4 +57,19 @@ describe("Header", () => {
     const output = lastFrame() ?? "";
     expect(output).not.toContain("active");
   });
+
+  it("shows warning when hooks not configured", () => {
+    const { lastFrame } = render(
+      <Header sessionCount={5} activeCount={3} degraded={false} socketAvailable={true} hooksConfigured={false} />
+    );
+    expect(lastFrame()).toContain("⚠");
+    expect(lastFrame()).toContain("hooks");
+  });
+
+  it("shows no hooks warning when configured", () => {
+    const { lastFrame } = render(
+      <Header sessionCount={5} activeCount={3} degraded={false} socketAvailable={true} hooksConfigured={true} />
+    );
+    expect(lastFrame()).not.toContain("hooks");
+  });
 });

@@ -34,6 +34,7 @@ import type { NotificationEvent } from "./components/index.js";
 export interface AppProps {
   config: GmuxConfig;
   server: Server | null;
+  hooksConfigured?: boolean;
 }
 
 type UIMode =
@@ -44,7 +45,7 @@ type UIMode =
   | { kind: "expanded-detail" }
   | { kind: "flash"; message: string };
 
-export function App({ config, server }: AppProps) {
+export function App({ config, server, hooksConfigured }: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const rows = (stdout?.rows ?? 40) - 1;
@@ -61,6 +62,7 @@ export function App({ config, server }: AppProps) {
   const [scrollbackContent, setScrollbackContent] = useState("");
   const [scrollOffset, setScrollOffset] = useState(0);
   const [searchQuery, setSearchQuery] = useState<string | null>(null);
+  const [searchInputActive, setSearchInputActive] = useState(false);
   const pollerRef = useRef<TmuxPoller | null>(null);
 
   const visibleSessions = useMemo(() => {
@@ -310,7 +312,7 @@ export function App({ config, server }: AppProps) {
   useInput(
     (input, key) => {
       if (input === "q" || (key.ctrl && input === "q")) { exit(); return; }
-      if (input === "/") { setSearchQuery(""); return; }
+      if (input === "/") { setSearchQuery(""); setSearchInputActive(true); return; }
       if (input === "k") { selectPrev(); return; }
       if (input === "j") { selectNext(); return; }
 
@@ -351,7 +353,7 @@ export function App({ config, server }: AppProps) {
         return;
       }
     },
-    { isActive: (uiMode.kind === "normal" || uiMode.kind === "flash") && !searchActive },
+    { isActive: (uiMode.kind === "normal" || uiMode.kind === "flash") && !searchInputActive },
   );
 
   useInput(
@@ -412,6 +414,7 @@ export function App({ config, server }: AppProps) {
         activeCount={activeCount}
         degraded={degraded}
         socketAvailable={server !== null}
+        hooksConfigured={hooksConfigured}
         focusSession={isExpanded ? selectedSession?.target : undefined}
       />
 
@@ -421,7 +424,11 @@ export function App({ config, server }: AppProps) {
             <SearchInput
               query={searchQuery}
               onChange={setSearchQuery}
-              onCancel={() => setSearchQuery(null)}
+              onCancel={() => { setSearchQuery(null); setSearchInputActive(false); }}
+              onAccept={() => setSearchInputActive(false)}
+              isActive={searchInputActive}
+              matchCount={visibleSessions.length}
+              totalCount={sessions.length}
             />
           ) : null}
           <SessionList
@@ -498,7 +505,7 @@ export function App({ config, server }: AppProps) {
 
       <CommandInput
         selectedTarget={selectedSession?.target ?? null}
-        isActive={uiMode.kind === "normal" && !searchActive}
+        isActive={uiMode.kind === "normal" && !searchInputActive}
         onError={handleSendError}
       />
     </Box>
