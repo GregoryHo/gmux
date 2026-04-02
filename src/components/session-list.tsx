@@ -132,7 +132,7 @@ export function SessionList({
         const cwd = truncateCwd(session.cwd);
 
         return (
-          <Box key={session.target} gap={1} paddingX={1}>
+          <Box key={session.target} gap={1} paddingX={1} backgroundColor={isSelected ? "gray" : undefined}>
             <Text dimColor={dimmed}>{indicator}</Text>
             <Text {...(dimmed ? { dimColor: true, color: "yellow" } : statusColor(session.status))}>{dot}</Text>
             <Text bold dimColor={dimmed}>{session.sessionName}</Text>

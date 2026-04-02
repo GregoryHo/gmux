@@ -234,6 +234,42 @@ describe("SessionList search filtering (now done outside component)", () => {
   });
 });
 
+describe("SessionList selected row highlight (fr-ux-004)", () => {
+  it("selected row shows ▸ indicator for the selected session (fr-ux-004-ac1)", () => {
+    const sessions = [
+      makeSession({ target: "arcforge:1.1", sessionName: "arcforge" }),
+      makeSession({ target: "workspace:1.1", sessionName: "workspace" }),
+    ];
+
+    const { lastFrame } = render(
+      <SessionList sessions={sessions} selectedTarget="arcforge:1.1" />,
+    );
+    const frame = lastFrame()!;
+    const lines = frame.split("\n");
+
+    const arcforgeLine = lines.find((l) => l.includes("arcforge"));
+    expect(arcforgeLine).toContain("▸");
+  });
+
+  it("only the selected row shows ▸, non-selected rows do not (fr-ux-004-ac2)", () => {
+    const sessions = [
+      makeSession({ target: "arcforge:1.1", sessionName: "arcforge" }),
+      makeSession({ target: "workspace:1.1", sessionName: "workspace" }),
+    ];
+
+    const { lastFrame } = render(
+      <SessionList sessions={sessions} selectedTarget="arcforge:1.1" />,
+    );
+    const frame = lastFrame()!;
+    const lines = frame.split("\n");
+
+    const arcforgeLine = lines.find((l) => l.includes("arcforge"));
+    const workspaceLine = lines.find((l) => l.includes("workspace"));
+    expect(arcforgeLine).toContain("▸");
+    expect(workspaceLine).not.toContain("▸");
+  });
+});
+
 describe("statusColor", () => {
   it("returns green for active status", () => {
     expect(statusColor("active")).toEqual({ color: "green" });
