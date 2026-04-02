@@ -14,6 +14,8 @@ export interface DetailPanelProps {
   scrollOffset?: number;
   /** Visible lines in expanded view. */
   visibleLines?: number;
+  /** Terminal width for text wrapping. */
+  terminalWidth?: number;
 }
 
 /**
@@ -53,6 +55,7 @@ export function DetailPanel({
   scrollbackContent,
   scrollOffset = 0,
   visibleLines = 20,
+  terminalWidth = 80,
 }: DetailPanelProps) {
   if (!session) {
     return (
@@ -85,8 +88,8 @@ export function DetailPanel({
   }
 
   // === Compact view: metadata + JSONL conversation preview ===
-  // Estimate available width (terminal width minus padding/borders/label)
-  const lineWidth = 80;
+  // Available width: terminal width minus padding (2) and borders (2) and label prefix ("You: " = 5)
+  const lineWidth = Math.max(40, terminalWidth - 9);
   // Budget: visible lines minus 1 for metadata header
   const lineBudget = (visibleLines ?? 20) - 1;
 

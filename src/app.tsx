@@ -48,6 +48,7 @@ export function App({ config, server }: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const rows = (stdout?.rows ?? 40) - 1;
+  const cols = stdout?.columns ?? 80;
   const heights = useMemo(() => calculateZoneHeights(rows), [rows]);
   const focusHeight = useMemo(() => calculateFocusHeight(rows), [rows]);
 
@@ -176,15 +177,16 @@ export function App({ config, server }: AppProps) {
       return;
     }
 
-    let cancelled = false;
-    // Fill the detail zone: 1 line for metadata header, rest for conversation
     const maxEntries = Math.max(3, heights.detail - 1);
-    readConversation(selectedSession.cwd, maxEntries).then((entries) => {
-      if (!cancelled) setConversation(entries);
-    });
+    const fetchConversation = () => {
+      readConversation(selectedSession.cwd, maxEntries).then(setConversation);
+    };
 
-    return () => { cancelled = true; };
-  }, [selectedSession?.target]);
+    fetchConversation();
+    const timer = setInterval(fetchConversation, config.pollInterval);
+
+    return () => clearInterval(timer);
+  }, [selectedSession?.target, config.pollInterval, heights.detail]);
 
   const handleFocusSession = useCallback(async () => {
     if (!selectedSession) return;
@@ -410,7 +412,8 @@ export function App({ config, server }: AppProps) {
           expanded={isExpanded}
           scrollbackContent={scrollbackContent}
           scrollOffset={scrollOffset}
-          visibleLines={isExpanded ? focusHeight - 2 : undefined}
+          visibleLines={isExpanded ? focusHeight - 2 : heights.detail}
+          terminalWidth={cols}
         />
       </Box>
 
