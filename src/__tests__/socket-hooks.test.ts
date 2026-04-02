@@ -6,6 +6,17 @@ import { join } from "node:path";
 const HOOKS_DIR = join(import.meta.dirname, "../../hooks");
 
 describe("hook scripts", () => {
+  it("gmux-attention.sh exists and sends needs_attention status", async () => {
+    const content = await readFile(
+      join(HOOKS_DIR, "gmux-attention.sh"),
+      "utf8",
+    );
+    expect(content).toContain("needs_attention");
+    expect(content).toContain("tmux display-message");
+    expect(content).toContain("/tmp/gmux.sock");
+    expect(content).toContain("exit 0");
+  });
+
   it("gmux-status.sh is executable", async () => {
     const info = await stat(join(HOOKS_DIR, "gmux-status.sh"));
     // Check owner execute bit (0o100)
