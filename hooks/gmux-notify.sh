@@ -11,8 +11,8 @@ SOCKET="/tmp/gmux.sock"
 [ -S "$SOCKET" ] || exit 0
 
 # Build the JSON payload
-SESSION="${TMUX_PANE:-unknown}"
-PANE="${TMUX_PANE:-unknown}"
+SESSION="$(tmux display-message -p '#{session_name}' 2>/dev/null || echo unknown)"
+PANE="$(tmux display-message -p '#{window_index}.#{pane_index}' 2>/dev/null || echo unknown)"
 MESSAGE="${1:-task completed}"
 JSON="{\"event\":\"notify\",\"session\":\"${SESSION}\",\"pane\":\"${PANE}\",\"message\":\"${MESSAGE}\"}"
 
