@@ -228,3 +228,99 @@ epics:
         status: "completed"
         source_requirement: "fr-lifecycle-005"
         depends_on: ["ui-command-input"]
+
+  # ── Layer 6: v1.2 UX Polish (parallel tracks) ────
+
+  - id: "epic-ux-polish"
+    name: "UX Polish"
+    status: "pending"
+    spec_path: "epics/epic-ux-polish/epic.md"
+    worktree: null
+    depends_on: ["epic-dashboard"]
+    features:
+      - id: "ux-status-colors"
+        name: "Status dot colors (green/dim/yellow/red-dim)"
+        status: "pending"
+        source_requirement: "fr-ux-003"
+        depends_on: ["ui-session-list"]
+      - id: "ux-notification-colors"
+        name: "Notification feed urgency colors"
+        status: "pending"
+        source_requirement: "fr-ux-005"
+        depends_on: ["ui-notification-feed"]
+      - id: "ux-identity-selection"
+        name: "Identity-based selection (selectedTarget)"
+        status: "pending"
+        source_requirement: "fr-ux-001"
+        depends_on: ["ui-session-list"]
+      - id: "ux-row-highlight"
+        name: "Selected row background highlight"
+        status: "pending"
+        source_requirement: "fr-ux-004"
+        depends_on: ["ux-identity-selection"]
+      - id: "ux-search-visual"
+        name: "Search visual improvements (inverse bar, match count, j/k nav)"
+        status: "pending"
+        source_requirement: "fr-ux-002"
+        depends_on: ["ux-identity-selection"]
+
+  - id: "epic-hooks-v2"
+    name: "Hook Integration (v1.2)"
+    status: "pending"
+    spec_path: "epics/epic-hooks-v2/epic.md"
+    worktree: null
+    depends_on: ["epic-socket"]
+    features:
+      - id: "hooks-fix-scripts"
+        name: "Fix hook scripts ($TMUX_PANE bug)"
+        status: "pending"
+        source_requirement: "fr-hooks-001"
+        depends_on: ["socket-hook-scripts"]
+      - id: "hooks-notification"
+        name: "Notification hook (gmux-attention.sh)"
+        status: "pending"
+        source_requirement: "fr-hooks-002"
+        depends_on: ["hooks-fix-scripts"]
+      - id: "hooks-detection"
+        name: "Hook detection at startup"
+        status: "pending"
+        source_requirement: "fr-hooks-003"
+        depends_on: ["foundation-startup"]
+      - id: "hooks-setup-cli"
+        name: "gmux --setup-hooks CLI command"
+        status: "pending"
+        source_requirement: "fr-hooks-004"
+        depends_on: ["hooks-fix-scripts", "hooks-notification", "hooks-detection"]
+
+  - id: "epic-detail-panel-v2"
+    name: "Detail Panel Redesign (v1.2)"
+    status: "pending"
+    spec_path: "epics/epic-detail-panel-v2/epic.md"
+    worktree: null
+    depends_on: ["epic-v1.1-improvements", "epic-ux-polish"]
+    features:
+      - id: "detail-live-source"
+        name: "LIVE terminal source (capture-pane + ANSI parsing)"
+        status: "pending"
+        source_requirement: "fr-detail-001"
+        depends_on: ["ux-identity-selection"]
+      - id: "detail-conv-toggle"
+        name: "CONV source + Tab toggle"
+        status: "pending"
+        source_requirement: "fr-detail-002"
+        depends_on: ["detail-live-source"]
+      - id: "detail-mode-indicator"
+        name: "Mode indicator in header ([LIVE]/[CONV]/⏸)"
+        status: "pending"
+        source_requirement: "fr-detail-005"
+        depends_on: ["detail-conv-toggle"]
+      - id: "detail-freeze"
+        name: "Freeze mode (Ctrl-E from bottom, j/k scroll)"
+        status: "pending"
+        source_requirement: "fr-detail-003"
+        depends_on: ["detail-conv-toggle"]
+      - id: "detail-auto-fallback"
+        name: "Auto-fallback on pane death (LIVE → CONV)"
+        status: "pending"
+        source_requirement: "fr-detail-004"
+        depends_on: ["detail-conv-toggle"]
