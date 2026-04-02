@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spec>
+  <meta>
+    <title>gmux — Global Agent Dashboard</title>
+    <version>1.1</version>
+    <source>docs/plans/2026-04-01-gmux-dashboard-design.md</source>
+    <phase>1 (Claude Code only)</phase>
+  </meta>
+
+  <overview>
+    A single-process CLI dashboard (React + Ink) that monitors AI agent instances
+    running in tmux, sends messages to them, and provides lightweight session management.
+    Runs on a second monitor as a "mission control" for parallel agent workflows.
+  </overview>
+
+  <cross_cutting>
+    <principle id="cc-001">
+      <title>gmux never kills what it doesn't own</title>
+      <description>An unexpected gmux crash or quit leaves all tmux sessions untouched.
+      gmux only manages its own process lifecycle (socket, pid file).</description>
+    </principle>
+    <principle id="cc-002">
+      <title>Graceful degradation</title>
+      <description>Socket failure degrades to polling-only mode. tmux unreachable degrades
+      to stale data with warning banner. Notification failure degrades to dashboard-only.
+      gmux never crashes due to external system failure.</description>
+    </principle>
+    <principle id="cc-003">
+      <title>Phase 1 scope: Claude Code only</title>
+      <description>Agent detection targets Claude Code via version-pattern matching.
+      Architecture supports adding Codex CLI, Gemini CLI in future phases without
+      restructuring.</description>
+    </principle>
+  </cross_cutting>
+
+  <details>
+    <detail_ref file="details/detection.xml" title="Agent Detection and Status" />
+    <detail_ref file="details/dashboard.xml" title="Dashboard UI and Interaction" />
+    <detail_ref file="details/session-management.xml" title="Session Management" />
+    <detail_ref file="details/socket-protocol.xml" title="Socket Protocol" />
+    <detail_ref file="details/notifications.xml" title="Notifications" />
+    <detail_ref file="details/lifecycle.xml" title="Process Lifecycle and Error Handling" />
+  </details>
+</spec>

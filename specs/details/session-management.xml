@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<detail id="session-management" title="Session Management">
+
+  <requirement id="fr-session-001">
+    <title>Create new tmux session with agent</title>
+    <description>Ctrl-N or :new enters a session creation flow: user provides a project
+    directory path (fzf-style picker starting from ~, with text input), session name is
+    auto-suggested from the directory name, and user can edit the launch command
+    (pre-filled with "claude -c").</description>
+    <trace>REQ-F007</trace>
+    <acceptance_criteria>
+      <criterion id="fr-session-001-ac1">
+        Given user presses Ctrl-N,
+        when the creation flow starts,
+        then a directory picker appears rooted at ~ with text input filtering.
+      </criterion>
+      <criterion id="fr-session-001-ac2">
+        Given user selects directory ~/GitHub/AI/myproject,
+        when the session name prompt appears,
+        then it is pre-filled with "myproject" (derived from directory basename).
+      </criterion>
+      <criterion id="fr-session-001-ac3">
+        Given user confirms directory and session name,
+        when the launch command prompt appears,
+        then it shows a pre-filled editable input with "claude -c".
+      </criterion>
+      <criterion id="fr-session-001-ac4">
+        Given user confirms all inputs (dir=/path, name=myproject, cmd="claude -c"),
+        when Commander executes,
+        then: tmux new-session -d -s myproject -c /path is invoked,
+        followed by: tmux send-keys -t myproject "claude -c" Enter.
+      </criterion>
+      <criterion id="fr-session-001-ac5">
+        Given the session name already exists in tmux,
+        when Commander attempts to create it,
+        then an error message is shown: "Session 'myproject' already exists".
+      </criterion>
+      <criterion id="fr-session-001-ac6">
+        Given creation succeeds,
+        when the next poll cycle runs,
+        then the new agent pane appears in the session list.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-session-002">
+    <title>Kill tmux session</title>
+    <description>Ctrl-K kills the selected tmux session. Since this is destructive
+    (terminates the agent), a confirmation prompt is shown first.</description>
+    <trace>REQ-F008</trace>
+    <acceptance_criteria>
+      <criterion id="fr-session-002-ac1">
+        Given session arcforge:1.1 is selected and user presses Ctrl-K,
+        when the confirmation prompt appears,
+        then it shows "Kill session arcforge? (y/n)".
+      </criterion>
+      <criterion id="fr-session-002-ac2">
+        Given user confirms with y,
+        when Commander executes,
+        then tmux kill-session -t arcforge is invoked.
+      </criterion>
+      <criterion id="fr-session-002-ac3">
+        Given user declines with n or Escape,
+        when the prompt closes,
+        then no action is taken.
+      </criterion>
+      <criterion id="fr-session-002-ac4">
+        Given the session is killed,
+        when the next poll cycle runs,
+        then the pane is removed from the session list and a "session ended" notification appears.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+</detail>

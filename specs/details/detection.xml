@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<detail id="detection" title="Agent Detection and Status">
+
+  <requirement id="fr-detect-001">
+    <title>Detect Claude Code instances via tmux</title>
+    <description>Identify Claude Code agent panes by matching tmux pane_current_command
+    against the version pattern.</description>
+    <trace>REQ-F001, REQ-N006</trace>
+    <acceptance_criteria>
+      <criterion id="fr-detect-001-ac1">
+        Given a tmux environment with panes running various commands (zsh, node, 2.1.89),
+        when TmuxPoller runs list-panes,
+        then only panes where pane_current_command matches /^\d+\.\d+\.\d+$/ are identified as agents.
+      </criterion>
+      <criterion id="fr-detect-001-ac2">
+        Given a pane running "node" or "zsh",
+        when TmuxPoller processes it,
+        then the pane is excluded from the agent list.
+      </criterion>
+      <criterion id="fr-detect-001-ac3">
+        Given gmux itself is running inside tmux,
+        when TmuxPoller runs list-panes,
+        then gmux auto-excludes its own pane by PID matching.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-detect-002">
+    <title>Poll tmux at regular intervals</title>
+    <description>TmuxPoller queries tmux every 3 seconds for pane state using
+    tmux list-panes -a -F with fields: session_name, window_index, pane_index,
+    pane_current_command, pane_current_path, pane_tty, pane_pid.</description>
+    <trace>REQ-F013</trace>
+    <acceptance_criteria>
+      <criterion id="fr-detect-002-ac1">
+        Given gmux is running and tmux is available,
+        when 3 seconds elapse since the last poll,
+        then TmuxPoller executes list-panes and updates SessionStore.
+      </criterion>
+      <criterion id="fr-detect-002-ac2">
+        Given a new agent pane appears between polls,
+        when the next poll runs,
+        then the new pane is added to SessionStore and a "new agent found" event is emitted.
+      </criterion>
+      <criterion id="fr-detect-002-ac3">
+        Given an agent pane disappears between polls,
+        when the next poll runs,
+        then the pane is marked as terminated and a "session ended" event is emitted.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-detect-003">
+    <title>Generic heuristic status detection from pane content</title>
+    <description>When no socket override exists for a pane, TmuxPoller captures pane content
+    via tmux capture-pane and classifies status using generic progress word detection
+    (inspired by dmux's cross-agent heuristic approach). Priority order:
+    1. needs_attention (highest) — user action required
+    2. active — "esc to interrupt" or generic progress words detected
+    3. idle — "-- INSERT --" present with NO active signals
+    4. unknown — fallback</description>
+    <trace>REQ-F016</trace>
+    <acceptance_criteria>
+      <criterion id="fr-detect-003-ac1">
+        Given captured pane content contains "esc to interrupt" or "esc to cancel",
+        when status heuristic runs,
+        then status is classified as "active" (highest-reliability cross-agent signal).
+      </criterion>
+      <criterion id="fr-detect-003-ac2">
+        Given captured pane content contains generic progress words
+        (thinking, crunching, building, running, testing, searching, analyzing,
+        writing, reading, editing, generating, compiling, scanning, processing,
+        planning, reasoning, reviewing, executing, loading),
+        when status heuristic runs,
+        then status is classified as "active".
+      </criterion>
+      <criterion id="fr-detect-003-ac3">
+        Given captured pane content contains "[Y/n]" or "proceed?",
+        when status heuristic runs,
+        then status is classified as "needs_attention".
+      </criterion>
+      <criterion id="fr-detect-003-ac4">
+        Given captured pane content contains "-- INSERT --" and NO active signals
+        (no "esc to interrupt", no progress words),
+        when status heuristic runs,
+        then status is classified as "idle".
+      </criterion>
+      <criterion id="fr-detect-003-ac5">
+        Given captured pane content matches no known pattern,
+        when status heuristic runs,
+        then status is classified as "unknown" and displayed as "?".
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-detect-004">
+    <title>Socket events override heuristics</title>
+    <description>Status pushed via /tmp/gmux.sock takes priority over heuristic classification.
+    Socket status is retained until the next socket event or until the pane disappears.</description>
+    <trace>REQ-F015</trace>
+    <acceptance_criteria>
+      <criterion id="fr-detect-004-ac1">
+        Given a socket event sets pane arcforge:1.1 status to "idle",
+        when TmuxPoller's heuristic would classify it as "active",
+        then SessionStore reports status as "idle" (socket wins).
+      </criterion>
+      <criterion id="fr-detect-004-ac2">
+        Given a socket status override exists for a pane,
+        when a new socket event arrives for the same pane,
+        then the override is updated to the new status.
+      </criterion>
+      <criterion id="fr-detect-004-ac3">
+        Given a socket status override exists for a pane,
+        when that pane disappears from tmux,
+        then the override is cleared.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-detect-005">
+    <title>Extract metadata from pane status bar</title>
+    <description>Parse model name and context usage percentage from the captured pane
+    content's status bar region (below the ❯ prompt). This metadata is displayed in
+    the detail panel header line. Conversation content is sourced from JSONL (see fr-ui-002),
+    NOT from pane content parsing.</description>
+    <trace>REQ-F003</trace>
+    <acceptance_criteria>
+      <criterion id="fr-detect-005-ac1">
+        Given a captured pane with a status bar containing model and context info,
+        when metadata extraction runs,
+        then model name and context percentage are extracted correctly.
+      </criterion>
+      <criterion id="fr-detect-005-ac2">
+        Given a captured pane with no parseable status bar,
+        when metadata extraction runs,
+        then model and contextPct return null (graceful degradation).
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+</detail>
