@@ -200,6 +200,8 @@ export function App({ config, server, hooksConfigured }: AppProps) {
       setConversation([]);
       return;
     }
+    // Don't refresh conversation when frozen (spec fr-detail-003-ac7)
+    if (detailFrozen && detailSource === "conv") return;
 
     const maxEntries = Math.max(3, heights.detail - 1);
     const fetchConversation = () => {
@@ -215,27 +217,33 @@ export function App({ config, server, hooksConfigured }: AppProps) {
     const timer = setInterval(fetchConversation, config.pollInterval);
 
     return () => clearInterval(timer);
-  }, [selectedSession?.target, config.pollInterval, heights.detail]);
+  }, [selectedSession?.target, config.pollInterval, heights.detail, detailFrozen, detailSource]);
+
+  // Track frozen state in a ref so the capture timer can read it without restarting
+  const detailFrozenRef = useRef(detailFrozen);
+  useEffect(() => { detailFrozenRef.current = detailFrozen; }, [detailFrozen]);
 
   useEffect(() => {
-    if (detailSource !== "live" || !selectedSession || detailFrozen) return;
+    if (detailSource !== "live" || !selectedSession) return;
 
     let cancelled = false;
     const tick = async () => {
       const content = await capturePane(selectedSession.target);
       if (cancelled) return;
       if (content === null) {
-        // Pane died — auto-fallback to CONV
         setDetailSource("conv");
         return;
       }
-      setLiveContent(content);
+      // Keep capturing but only update state when not frozen (spec fr-detail-003-ac1)
+      if (!detailFrozenRef.current) {
+        setLiveContent(content);
+      }
     };
 
-    void tick(); // immediate first capture
+    void tick();
     const timer = setInterval(() => void tick(), 1000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [selectedSession?.target, detailSource, detailFrozen]);
+  }, [selectedSession?.target, detailSource]);
 
   const handleFocusSession = useCallback(async () => {
     if (!selectedSession) return;

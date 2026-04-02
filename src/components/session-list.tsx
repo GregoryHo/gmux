@@ -132,14 +132,14 @@ export function SessionList({
         const cwd = truncateCwd(session.cwd);
 
         return (
-          <Box key={session.target} gap={1} paddingX={1} backgroundColor={isSelected ? "gray" : undefined}>
-            <Text dimColor={dimmed}>{indicator}</Text>
+          <Box key={session.target} gap={1} paddingX={1}>
+            <Text bold={isSelected} dimColor={dimmed}>{indicator}</Text>
             <Text {...(dimmed ? { dimColor: true, color: "yellow" } : statusColor(session.status))}>{dot}</Text>
-            <Text bold dimColor={dimmed}>{session.sessionName}</Text>
-            <Text dimColor>{label}</Text>
-            {branch ? <Text color="cyan" dimColor={dimmed}>{branch}</Text> : null}
-            <Text dimColor>{cwd}</Text>
-            <Text dimColor>{session.command}</Text>
+            <Text bold={isSelected || !dimmed} dimColor={dimmed}>{session.sessionName}</Text>
+            <Text bold={isSelected} dimColor={!isSelected}>{label}</Text>
+            {branch ? <Text bold={isSelected} color="cyan" dimColor={dimmed}>{branch}</Text> : null}
+            <Text bold={isSelected} dimColor={!isSelected}>{cwd}</Text>
+            <Text bold={isSelected} dimColor={!isSelected}>{session.command}</Text>
           </Box>
         );
       })}
