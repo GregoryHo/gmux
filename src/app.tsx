@@ -179,7 +179,12 @@ export function App({ config, server }: AppProps) {
 
     const maxEntries = Math.max(3, heights.detail - 1);
     const fetchConversation = () => {
-      readConversation(selectedSession.cwd, maxEntries).then(setConversation);
+      readConversation(selectedSession.cwd, maxEntries).then((entries) => {
+        setConversation((prev) => {
+          if (prev.length === entries.length && prev.every((e, i) => e.text === entries[i]?.text)) return prev;
+          return entries;
+        });
+      });
     };
 
     fetchConversation();
