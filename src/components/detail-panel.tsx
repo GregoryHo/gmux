@@ -82,13 +82,11 @@ function LiveView({
   frozen,
   scrollOffset,
   visibleLines,
-  panelWidth,
 }: {
   content: string;
   frozen: boolean;
   scrollOffset: number;
   visibleLines: number;
-  panelWidth: number;
 }) {
   const lines = content.split("\n");
 
@@ -110,7 +108,7 @@ function LiveView({
   return (
     <Box flexDirection="column" overflowX="hidden">
       {displayLines.map((line, i) => (
-        <Box key={i} width={panelWidth} overflowX="hidden">
+        <Box key={i}>
           <AnsiText text={line || " "} />
         </Box>
       ))}
@@ -190,7 +188,6 @@ export function DetailPanel({
           frozen={frozen}
           scrollOffset={scrollOffset}
           visibleLines={visibleLines - 1}
-          panelWidth={Math.max(20, terminalWidth - 4)}
         />
       ) : (
         <ConvView
