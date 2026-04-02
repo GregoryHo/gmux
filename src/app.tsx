@@ -13,7 +13,7 @@ import { setupSocketServer } from "./socket-server.js";
 import { validateEvent } from "./socket-events.js";
 import { StatusOverrideStore } from "./status-overrides.js";
 import { readConversation, type ConversationEntry } from "./jsonl-reader.js";
-import { capturePane } from "./live-capture.js";
+import { capturePane, getPaneWidth } from "./live-capture.js";
 import { interruptPane, killSession, listClients, switchClient, newSession, sendKeys } from "./commander.js";
 import type { TmuxClient } from "./commander.js";
 import { Notifier } from "./notifier.js";
@@ -63,6 +63,7 @@ export function App({ config, server, hooksConfigured }: AppProps) {
   const [detailSource, setDetailSource] = useState<DetailSource>("live");
   const [detailFrozen, setDetailFrozen] = useState(false);
   const [liveContent, setLiveContent] = useState("");
+  const [sourcePaneWidth, setSourcePaneWidth] = useState<number | null>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [searchQuery, setSearchQuery] = useState<string | null>(null);
   const [searchInputActive, setSearchInputActive] = useState(false);
@@ -227,6 +228,11 @@ export function App({ config, server, hooksConfigured }: AppProps) {
     if (detailSource !== "live" || !selectedSession) return;
 
     let cancelled = false;
+    // Fetch source pane width once when target changes
+    void getPaneWidth(selectedSession.target).then((w) => {
+      if (!cancelled && w !== null) setSourcePaneWidth(w);
+    });
+
     const tick = async () => {
       const content = await capturePane(selectedSession.target);
       if (cancelled) return;
@@ -234,7 +240,6 @@ export function App({ config, server, hooksConfigured }: AppProps) {
         setDetailSource("conv");
         return;
       }
-      // Keep capturing but only update state when not frozen (spec fr-detail-003-ac1)
       if (!detailFrozenRef.current) {
         setLiveContent(content);
       }
@@ -493,6 +498,7 @@ export function App({ config, server, hooksConfigured }: AppProps) {
           scrollOffset={scrollOffset}
           visibleLines={detailFrozen ? focusHeight - 2 : heights.detail}
           terminalWidth={cols}
+          sourcePaneWidth={sourcePaneWidth}
           paneAlive={selectedSession ? sessions.some(s => s.target === selectedSession.target) : false}
         />
       </Box>

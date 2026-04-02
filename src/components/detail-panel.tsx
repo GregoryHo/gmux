@@ -18,6 +18,8 @@ export interface DetailPanelProps {
   visibleLines?: number;
   /** Terminal width for text wrapping. */
   terminalWidth?: number;
+  /** Source pane width (for ratio indicator when wider than panel). */
+  sourcePaneWidth?: number | null;
   /** Whether the tmux pane is still alive. */
   paneAlive?: boolean;
 }
@@ -56,19 +58,29 @@ function MetadataHeader({
   session,
   source,
   frozen,
+  sourcePaneWidth,
+  panelWidth,
 }: {
   session: AgentSession;
   source: "live" | "conv";
   frozen: boolean;
+  sourcePaneWidth?: number | null;
+  panelWidth: number;
 }) {
   const parts: string[] = [session.target];
   if (session.command) parts.push(`Claude ${session.command}`);
   if (session.metadata.model) parts.push(session.metadata.model);
   if (session.metadata.contextPct !== null) parts.push(`${session.metadata.contextPct}% ctx`);
+
+  const mode = modeIndicator(source, frozen);
+  const widthRatio = source === "live" && sourcePaneWidth && sourcePaneWidth > panelWidth
+    ? ` ${sourcePaneWidth}\u2192${panelWidth}`
+    : "";
+
   return (
     <Box justifyContent="space-between">
       <Text>{parts.join(" \u00B7 ")}</Text>
-      <Text dimColor>{modeIndicator(source, frozen)}</Text>
+      <Text dimColor>{mode}{widthRatio}</Text>
     </Box>
   );
 }
@@ -168,6 +180,7 @@ export function DetailPanel({
   scrollOffset = 0,
   visibleLines = 20,
   terminalWidth = 80,
+  sourcePaneWidth,
   paneAlive = true,
 }: DetailPanelProps) {
   if (!session) {
@@ -180,7 +193,8 @@ export function DetailPanel({
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <MetadataHeader session={session} source={source} frozen={frozen} />
+      <MetadataHeader session={session} source={source} frozen={frozen}
+        sourcePaneWidth={sourcePaneWidth} panelWidth={terminalWidth - 4} />
       {!paneAlive ? <Text dimColor italic>session ended</Text> : null}
       {source === "live" ? (
         <LiveView

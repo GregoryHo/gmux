@@ -77,7 +77,7 @@ export function AnsiText({ text }: AnsiTextProps) {
   const tokens = parseAnsiSequences(text);
 
   return (
-    <Text>
+    <Text wrap="truncate">
       {tokens.map((token, i) => (
         <TokenSpan key={i} token={token} />
       ))}
