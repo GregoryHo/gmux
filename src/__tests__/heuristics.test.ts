@@ -117,8 +117,8 @@ describe("classifyStatus", () => {
       "  ✓ Edit ×25 | ✓ Bash ×17",
       "  -- INSERT --",
     ].join("\n");
-    // "Crunched" is past tense but it's a progress word — however it's outside bottom 15
-    // The bottom region has only completed tools + INSERT → idle
+    // "Crunched" is past tense — doesn't match "crunching" in progress words
+    // Bottom region has only completed tools (✓) + INSERT → idle
     expect(classifyStatus(content)).toBe("idle");
   });
 
