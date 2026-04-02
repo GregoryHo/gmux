@@ -45,6 +45,28 @@
 | Tech | Swift/AppKit | TS/React Ink | Elixir/BEAM | TS/React Ink |
 | Focus | Full terminal | Worktree mgmt | Auto-pilot | Dashboard/monitor |
 
+## Deep Dive: dmux Detail Pane Architecture (2026-04-02)
+
+**Live streaming, not polling:**
+- Uses `tmux pipe-pane` → named pipe → `tail -f` → Server-Sent Events (incremental patches)
+- Full refresh every 2s to fix patch drift
+- PaneAnalyzer works on-demand (not continuous) — only when terminal content stabilizes
+- Worker poll interval: 1000ms
+
+**LLM-powered analysis (3-model race):**
+- Gemini 2.5 Flash, Grok 4 Fast, GPT-4o-mini via OpenRouter — first success wins
+- Content-hash caching (MD5) with 5s TTL, LRU eviction at 100 entries
+- Three-stage pipeline: determineState → extractOptions → extractSummary
+
+**No conversation abstraction:**
+- Detail view always shows raw terminal content with ANSI codes
+- Parsed data (agentStatus, options, summary) used only for notifications/status indicators
+- No JSONL reading, no structured conversation history
+
+**Terminated panes:**
+- Worker catches "can't find pane" → emits `pane-removed` → worker shuts down
+- Pane removed from UI — **no fallback display, no history**
+
 ## Key Takeaways for gmux
 
 1. **dmux is the closest reference** — same tech stack (React + Ink), same tmux-based approach
