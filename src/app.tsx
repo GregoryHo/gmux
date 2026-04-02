@@ -53,7 +53,7 @@ export function App({ config, server }: AppProps) {
   const focusHeight = useMemo(() => calculateFocusHeight(rows), [rows]);
 
   const [sessions, setSessions] = useState<AgentSession[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
   const [uiMode, setUIMode] = useState<UIMode>({ kind: "normal" });
   const [degraded, setDegraded] = useState(false);
@@ -62,6 +62,18 @@ export function App({ config, server }: AppProps) {
   const [scrollOffset, setScrollOffset] = useState(0);
   const [searchQuery, setSearchQuery] = useState<string | null>(null);
   const pollerRef = useRef<TmuxPoller | null>(null);
+
+  const visibleSessions = useMemo(() => {
+    if (searchQuery === null) return sessions;
+    return sessions.filter((s) =>
+      s.sessionName.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [sessions, searchQuery]);
+
+  const selectedIndex = useMemo(() => {
+    if (!selectedTarget || visibleSessions.length === 0) return -1;
+    return visibleSessions.findIndex((s) => s.target === selectedTarget);
+  }, [selectedTarget, visibleSessions]);
 
   const pushNotification = useCallback((name: string, msg: string) => {
     setNotifications((prev) => addNotification(prev, createNotification(name, msg)));
@@ -157,19 +169,26 @@ export function App({ config, server }: AppProps) {
   }, [config.pollInterval]);
 
   useEffect(() => {
-    if (sessions.length === 0) {
-      setSelectedIndex(0);
-    } else if (selectedIndex >= sessions.length) {
-      setSelectedIndex(sessions.length - 1);
+    if (visibleSessions.length === 0) {
+      if (selectedTarget !== null) setSelectedTarget(null);
+      return;
     }
-  }, [sessions.length, selectedIndex]);
+    if (selectedIndex < 0) {
+      setSelectedTarget(visibleSessions[0].target);
+    }
+  }, [visibleSessions, selectedIndex, selectedTarget]);
 
   useEffect(() => {
-    if (searchQuery !== null) setSelectedIndex(0);
+    if (searchQuery !== null && visibleSessions.length > 0) {
+      setSelectedTarget(visibleSessions[0].target);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
   const selectedSession =
-    sessions.length > 0 ? sessions[selectedIndex] ?? null : null;
+    selectedIndex >= 0
+      ? visibleSessions[selectedIndex] ?? null
+      : visibleSessions[0] ?? null;
 
   useEffect(() => {
     if (!selectedSession) {
@@ -267,12 +286,18 @@ export function App({ config, server }: AppProps) {
   const isExpanded = uiMode.kind === "expanded-detail";
   const searchActive = searchQuery !== null;
 
-  const selectPrev = () => setSelectedIndex((prev) =>
-    sessions.length === 0 ? 0 : (prev - 1 + sessions.length) % sessions.length,
-  );
-  const selectNext = () => setSelectedIndex((prev) =>
-    sessions.length === 0 ? 0 : (prev + 1) % sessions.length,
-  );
+  const selectPrev = () => {
+    if (visibleSessions.length === 0) return;
+    const cur = Math.max(0, selectedIndex);
+    const prev = (cur - 1 + visibleSessions.length) % visibleSessions.length;
+    setSelectedTarget(visibleSessions[prev].target);
+  };
+  const selectNext = () => {
+    if (visibleSessions.length === 0) return;
+    const cur = Math.max(0, selectedIndex);
+    const next = (cur + 1) % visibleSessions.length;
+    setSelectedTarget(visibleSessions[next].target);
+  };
 
   useInput(
     (_input, key) => {
@@ -400,11 +425,10 @@ export function App({ config, server }: AppProps) {
             />
           ) : null}
           <SessionList
-            sessions={sessions}
-            selectedIndex={selectedIndex}
+            sessions={visibleSessions}
+            selectedTarget={selectedTarget}
             dimmed={degraded}
             maxHeight={searchActive ? heights.session - 1 : heights.session}
-            searchQuery={searchQuery ?? undefined}
           />
         </Box>
       ) : null}

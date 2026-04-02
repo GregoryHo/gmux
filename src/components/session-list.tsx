@@ -3,10 +3,9 @@ import type { AgentSession, AgentStatus } from "../types.js";
 
 export interface SessionListProps {
   sessions: AgentSession[];
-  selectedIndex: number;
+  selectedTarget: string | null;
   dimmed?: boolean;
   maxHeight?: number;
-  searchQuery?: string;
 }
 
 export function statusColor(status: AgentStatus): { color?: string; dimColor?: boolean } {
@@ -88,41 +87,35 @@ export function extractBranch(session: AgentSession): string {
 
 export function SessionList({
   sessions,
-  selectedIndex,
+  selectedTarget,
   dimmed = false,
   maxHeight,
-  searchQuery,
 }: SessionListProps) {
-  const filtered = searchQuery
-    ? sessions.filter((s) =>
-        s.sessionName.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-    : sessions;
-
-  if (filtered.length === 0) {
+  if (sessions.length === 0) {
     return (
       <Box paddingX={1}>
-        <Text dimColor>
-          {searchQuery ? "No matching sessions" : "No agent sessions detected"}
-        </Text>
+        <Text dimColor>No agent sessions detected</Text>
       </Box>
     );
   }
 
-  let visibleSessions = filtered;
+  const selectedIdx = sessions.findIndex((s) => s.target === selectedTarget);
+
+  let visibleSessions = sessions;
   let showUpIndicator = false;
   let showDownIndicator = false;
 
-  if (maxHeight && filtered.length > maxHeight) {
+  if (maxHeight && sessions.length > maxHeight) {
     const halfWindow = Math.floor(maxHeight / 2);
-    let start = Math.max(0, selectedIndex - halfWindow);
-    const end = Math.min(filtered.length, start + maxHeight);
-    if (end === filtered.length) {
+    const idxForWindow = selectedIdx >= 0 ? selectedIdx : 0;
+    let start = Math.max(0, idxForWindow - halfWindow);
+    const end = Math.min(sessions.length, start + maxHeight);
+    if (end === sessions.length) {
       start = Math.max(0, end - maxHeight);
     }
-    visibleSessions = filtered.slice(start, end);
+    visibleSessions = sessions.slice(start, end);
     showUpIndicator = start > 0;
-    showDownIndicator = end < filtered.length;
+    showDownIndicator = end < sessions.length;
   }
 
   return (
@@ -131,8 +124,7 @@ export function SessionList({
         <Box paddingX={1}><Text dimColor>▲ more</Text></Box>
       ) : null}
       {visibleSessions.map((session) => {
-        const actualIndex = sessions.indexOf(session);
-        const isSelected = actualIndex === selectedIndex;
+        const isSelected = session.target === selectedTarget;
         const indicator = isSelected ? "▸" : " ";
         const dot = statusDot(session.status);
         const label = statusLabel(session.status);
