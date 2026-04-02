@@ -130,16 +130,18 @@ export function SessionList({
         const label = statusLabel(session.status);
         const branch = extractBranch(session);
         const cwd = truncateCwd(session.cwd);
+        // Shared style: selected rows are bold + full color, unselected are dim
+        const rowStyle = { bold: isSelected || undefined, dimColor: !isSelected || undefined };
 
         return (
           <Box key={session.target} gap={1} paddingX={1}>
             <Text bold={isSelected} dimColor={dimmed}>{indicator}</Text>
             <Text {...(dimmed ? { dimColor: true, color: "yellow" } : statusColor(session.status))}>{dot}</Text>
             <Text bold={isSelected || !dimmed} dimColor={dimmed}>{session.sessionName}</Text>
-            <Text bold={isSelected} dimColor={!isSelected}>{label}</Text>
+            <Text {...rowStyle}>{label}</Text>
             {branch ? <Text bold={isSelected} color="cyan" dimColor={dimmed}>{branch}</Text> : null}
-            <Text bold={isSelected} dimColor={!isSelected}>{cwd}</Text>
-            <Text bold={isSelected} dimColor={!isSelected}>{session.command}</Text>
+            <Text {...rowStyle}>{cwd}</Text>
+            <Text {...rowStyle}>{session.command}</Text>
           </Box>
         );
       })}
