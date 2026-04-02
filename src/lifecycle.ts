@@ -1,6 +1,7 @@
 import { readFile, writeFile, unlink } from "node:fs/promises";
 import { createServer, type Server } from "node:net";
 import { isNodeError } from "./utils.js";
+import { exitAlternateScreen } from "./screen.js";
 
 export const PID_PATH = "/tmp/gmux.pid";
 export const SOCKET_PATH = "/tmp/gmux.sock";
@@ -128,6 +129,7 @@ export function registerSignalHandlers(server?: Server): void {
     if (shuttingDown) return;
     shuttingDown = true;
 
+    exitAlternateScreen();
     await cleanup(server);
     process.exit(0);
   };
