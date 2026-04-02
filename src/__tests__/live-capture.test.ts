@@ -50,7 +50,7 @@ describe("capturePane", () => {
 
     expect(mockedExecFile).toHaveBeenCalledWith(
       "tmux",
-      ["capture-pane", "-e", "-p", "-J", "-t", "work:1.0"],
+      ["capture-pane", "-e", "-p", "-t", "work:1.0"],
       { timeout: 5000 },
       expect.any(Function),
     );
