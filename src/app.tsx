@@ -258,49 +258,27 @@ export function App({ config, server }: AppProps) {
   const isExpanded = uiMode.kind === "expanded-detail";
   const searchActive = searchQuery !== null;
 
-  // Arrow-key navigation — active during search so users can select filtered results
+  const selectPrev = () => setSelectedIndex((prev) =>
+    sessions.length === 0 ? 0 : (prev - 1 + sessions.length) % sessions.length,
+  );
+  const selectNext = () => setSelectedIndex((prev) =>
+    sessions.length === 0 ? 0 : (prev + 1) % sessions.length,
+  );
+
   useInput(
     (_input, key) => {
-      if (key.upArrow) {
-        setSelectedIndex((prev) =>
-          sessions.length === 0 ? 0 : (prev - 1 + sessions.length) % sessions.length,
-        );
-        return;
-      }
-      if (key.downArrow) {
-        setSelectedIndex((prev) =>
-          sessions.length === 0 ? 0 : (prev + 1) % sessions.length,
-        );
-      }
+      if (key.upArrow) { selectPrev(); return; }
+      if (key.downArrow) { selectNext(); }
     },
     { isActive: !isExpanded && uiMode.kind !== "confirm-kill" },
   );
 
-  // Overview keybindings (actions + j/k nav + search trigger)
   useInput(
     (input, key) => {
-      if (input === "q" || (key.ctrl && input === "q")) {
-        exit();
-        return;
-      }
-
-      if (input === "/") {
-        setSearchQuery("");
-        return;
-      }
-
-      if (input === "k") {
-        setSelectedIndex((prev) =>
-          sessions.length === 0 ? 0 : (prev - 1 + sessions.length) % sessions.length,
-        );
-        return;
-      }
-      if (input === "j") {
-        setSelectedIndex((prev) =>
-          sessions.length === 0 ? 0 : (prev + 1) % sessions.length,
-        );
-        return;
-      }
+      if (input === "q" || (key.ctrl && input === "q")) { exit(); return; }
+      if (input === "/") { setSearchQuery(""); return; }
+      if (input === "k") { selectPrev(); return; }
+      if (input === "j") { selectNext(); return; }
 
       if (key.ctrl && input === "c") {
         if (selectedSession) void interruptPane(selectedSession.target);
