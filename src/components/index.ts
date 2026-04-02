@@ -18,3 +18,6 @@ export type { SessionCreatorProps } from "./session-creator.js";
 
 export { Header } from "./header.js";
 export type { HeaderProps } from "./header.js";
+
+export { SearchInput } from "./search-input.js";
+export type { SearchInputProps } from "./search-input.js";
