@@ -13,7 +13,7 @@ import { setupSocketServer } from "./socket-server.js";
 import { validateEvent } from "./socket-events.js";
 import { StatusOverrideStore } from "./status-overrides.js";
 import { readConversation, type ConversationEntry } from "./jsonl-reader.js";
-import { captureFullScrollback } from "./tmux.js";
+import { capturePane } from "./live-capture.js";
 import { interruptPane, killSession, listClients, switchClient, newSession, sendKeys } from "./commander.js";
 import type { TmuxClient } from "./commander.js";
 import { Notifier } from "./notifier.js";
@@ -42,8 +42,9 @@ type UIMode =
   | { kind: "confirm-kill"; sessionName: string }
   | { kind: "client-picker"; clients: TmuxClient[] }
   | { kind: "create-session" }
-  | { kind: "expanded-detail" }
   | { kind: "flash"; message: string };
+
+type DetailSource = "live" | "conv";
 
 export function App({ config, server, hooksConfigured }: AppProps) {
   const { exit } = useApp();
@@ -59,7 +60,9 @@ export function App({ config, server, hooksConfigured }: AppProps) {
   const [uiMode, setUIMode] = useState<UIMode>({ kind: "normal" });
   const [degraded, setDegraded] = useState(false);
   const [conversation, setConversation] = useState<ConversationEntry[]>([]);
-  const [scrollbackContent, setScrollbackContent] = useState("");
+  const [detailSource, setDetailSource] = useState<DetailSource>("live");
+  const [detailFrozen, setDetailFrozen] = useState(false);
+  const [liveContent, setLiveContent] = useState("");
   const [scrollOffset, setScrollOffset] = useState(0);
   const [searchQuery, setSearchQuery] = useState<string | null>(null);
   const [searchInputActive, setSearchInputActive] = useState(false);
@@ -214,6 +217,26 @@ export function App({ config, server, hooksConfigured }: AppProps) {
     return () => clearInterval(timer);
   }, [selectedSession?.target, config.pollInterval, heights.detail]);
 
+  useEffect(() => {
+    if (detailSource !== "live" || !selectedSession || detailFrozen) return;
+
+    let cancelled = false;
+    const tick = async () => {
+      const content = await capturePane(selectedSession.target);
+      if (cancelled) return;
+      if (content === null) {
+        // Pane died — auto-fallback to CONV
+        setDetailSource("conv");
+        return;
+      }
+      setLiveContent(content);
+    };
+
+    void tick(); // immediate first capture
+    const timer = setInterval(() => void tick(), 1000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [selectedSession?.target, detailSource, detailFrozen]);
+
   const handleFocusSession = useCallback(async () => {
     if (!selectedSession) return;
 
@@ -285,7 +308,6 @@ export function App({ config, server, hooksConfigured }: AppProps) {
     }
   }, []);
 
-  const isExpanded = uiMode.kind === "expanded-detail";
   const searchActive = searchQuery !== null;
 
   const selectPrev = () => {
@@ -306,7 +328,7 @@ export function App({ config, server, hooksConfigured }: AppProps) {
       if (key.upArrow) { selectPrev(); return; }
       if (key.downArrow) { selectNext(); }
     },
-    { isActive: !isExpanded && uiMode.kind !== "confirm-kill" },
+    { isActive: !detailFrozen && uiMode.kind !== "confirm-kill" },
   );
 
   useInput(
@@ -328,17 +350,27 @@ export function App({ config, server, hooksConfigured }: AppProps) {
         return;
       }
 
+      if (key.tab) {
+        // Only toggle if pane is alive (check if selectedSession is in sessions)
+        const paneAlive = selectedSession && sessions.some(s => s.target === selectedSession.target);
+        if (paneAlive) {
+          setDetailSource(prev => prev === "live" ? "conv" : "live");
+          setDetailFrozen(false);
+        }
+        return;
+      }
+
       if (key.ctrl && input === "e") {
-        if (selectedSession) {
-          setScrollOffset(0);
-          captureFullScrollback(selectedSession.target)
-            .then((content) => {
-              setScrollbackContent(content);
-              setUIMode({ kind: "expanded-detail" });
-            })
-            .catch(() => {
-              setUIMode({ kind: "flash", message: "Failed to capture scrollback" });
-            });
+        if (detailFrozen) {
+          // Unfreeze
+          setDetailFrozen(false);
+        } else if (selectedSession) {
+          // Freeze — set scroll offset to bottom
+          const content = detailSource === "live" ? liveContent : "";
+          const lines = content.split("\n");
+          const visible = heights.detail;
+          setScrollOffset(Math.max(0, lines.length - visible));
+          setDetailFrozen(true);
         }
         return;
       }
@@ -358,33 +390,35 @@ export function App({ config, server, hooksConfigured }: AppProps) {
 
   useInput(
     (input, key) => {
-      if (key.escape || (key.ctrl && input === "e")) {
-        setScrollbackContent("");
-        setUIMode({ kind: "normal" });
+      if (key.escape) {
+        setDetailFrozen(false);
+        return;
+      }
+      if (key.ctrl && input === "e") {
+        setDetailFrozen(false);
         return;
       }
       if (key.upArrow || input === "k") {
-        setScrollOffset((prev) => Math.max(0, prev - 1));
+        setScrollOffset(prev => Math.max(0, prev - 1));
         return;
       }
       if (key.downArrow || input === "j") {
-        setScrollOffset((prev) => prev + 1);
+        setScrollOffset(prev => prev + 1);
         return;
       }
       if (key.ctrl && input === "u") {
-        setScrollOffset((prev) => Math.max(0, prev - 10));
+        setScrollOffset(prev => Math.max(0, prev - 10));
         return;
       }
       if (key.ctrl && input === "d") {
-        setScrollOffset((prev) => prev + 10);
+        setScrollOffset(prev => prev + 10);
         return;
       }
       if (input === "q" || (key.ctrl && input === "q")) {
         exit();
-        return;
       }
     },
-    { isActive: isExpanded },
+    { isActive: detailFrozen },
   );
 
   useInput(
@@ -415,10 +449,10 @@ export function App({ config, server, hooksConfigured }: AppProps) {
         degraded={degraded}
         socketAvailable={server !== null}
         hooksConfigured={hooksConfigured}
-        focusSession={isExpanded ? selectedSession?.target : undefined}
+        focusSession={detailFrozen ? selectedSession?.target : undefined}
       />
 
-      {!isExpanded ? (
+      {!detailFrozen ? (
         <Box borderStyle="single" flexDirection="column" height={heights.session + 2}>
           {searchActive ? (
             <SearchInput
@@ -441,20 +475,21 @@ export function App({ config, server, hooksConfigured }: AppProps) {
       ) : null}
 
       <Box borderStyle="single" flexDirection="column"
-        height={isExpanded ? focusHeight : heights.detail + 2}>
+        height={detailFrozen ? focusHeight : heights.detail + 2}>
         <DetailPanel
           session={selectedSession}
-          source={isExpanded ? "live" : "conv"}
-          frozen={isExpanded}
-          liveContent={scrollbackContent}
+          source={detailSource}
+          frozen={detailFrozen}
+          liveContent={liveContent}
           conversation={conversation}
           scrollOffset={scrollOffset}
-          visibleLines={isExpanded ? focusHeight - 2 : heights.detail}
+          visibleLines={detailFrozen ? focusHeight - 2 : heights.detail}
           terminalWidth={cols}
+          paneAlive={selectedSession ? sessions.some(s => s.target === selectedSession.target) : false}
         />
       </Box>
 
-      {!isExpanded ? (
+      {!detailFrozen ? (
         <Box borderStyle="single" flexDirection="column" height={heights.notify + 2}>
           {notifications.length > 0 ? (
             <NotificationFeed events={notifications} maxHeight={heights.notify} />
