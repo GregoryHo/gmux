@@ -66,4 +66,22 @@ describe("AnsiText", () => {
     expect(frame).toContain("Bold green");
     expect(frame).not.toContain("\x1b[1;32m");
   });
+
+  it("renders 256-color sequences without showing raw codes", () => {
+    // \x1b[38;5;42m = 256-color index 42 (green)
+    const text = "\x1b[38;5;42m256 green\x1b[0m";
+    const { lastFrame } = render(<AnsiText text={text} />);
+    const frame = lastFrame()!;
+    expect(frame).toContain("256 green");
+    expect(frame).not.toContain("\x1b[38;5;42m");
+  });
+
+  it("renders RGB color sequences without showing raw codes", () => {
+    // \x1b[38;2;100;200;50m = RGB(100, 200, 50)
+    const text = "\x1b[38;2;100;200;50mRGB text\x1b[0m";
+    const { lastFrame } = render(<AnsiText text={text} />);
+    const frame = lastFrame()!;
+    expect(frame).toContain("RGB text");
+    expect(frame).not.toContain("\x1b[38;2;");
+  });
 });

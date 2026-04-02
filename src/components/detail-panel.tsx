@@ -96,9 +96,11 @@ function LiveView({
   }
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" overflowX="hidden">
       {displayLines.map((line, i) => (
-        <AnsiText key={i} text={line || " "} />
+        <Box key={i} overflowX="hidden">
+          <AnsiText text={line || " "} />
+        </Box>
       ))}
     </Box>
   );
