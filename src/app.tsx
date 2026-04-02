@@ -168,6 +168,11 @@ export function App({ config, server }: AppProps) {
     }
   }, [sessions.length, selectedIndex]);
 
+  // Reset selection when search query changes
+  useEffect(() => {
+    if (searchQuery) setSelectedIndex(0);
+  }, [searchQuery]);
+
   const selectedSession =
     sessions.length > 0 ? sessions[selectedIndex] ?? null : null;
 
@@ -328,32 +333,6 @@ export function App({ config, server }: AppProps) {
     { isActive: (uiMode.kind === "normal" || uiMode.kind === "flash") && !searchActive },
   );
 
-  // Search keybindings (active when search bar is open)
-  useInput(
-    (input, key) => {
-      if (key.escape) {
-        setSearchQuery("");
-        setSearchActive(false);
-        return;
-      }
-      if (key.return) {
-        setSearchActive(false);
-        return;
-      }
-      if (key.backspace || key.delete) {
-        setSearchQuery((prev) => prev.slice(0, -1));
-        return;
-      }
-      if (key.ctrl || key.meta) return;
-      if (key.upArrow || key.downArrow || key.leftArrow || key.rightArrow) return;
-      if (key.tab) return;
-      if (input) {
-        setSearchQuery((prev) => prev + input);
-      }
-    },
-    { isActive: searchActive },
-  );
-
   // Focus mode keybindings (scrollback navigation)
   useInput(
     (input, key) => {
@@ -426,6 +405,7 @@ export function App({ config, server }: AppProps) {
               query={searchQuery}
               onChange={setSearchQuery}
               onCancel={() => { setSearchQuery(""); setSearchActive(false); }}
+              isActive={searchActive}
             />
           ) : null}
           <SessionList
