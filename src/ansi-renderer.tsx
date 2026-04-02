@@ -24,25 +24,14 @@ const PALETTE_256: string[] = (() => {
   return p;
 })();
 
-function resolveColor(token: ParseToken): string | undefined {
-  const fg = token.foreground;
-  if (!fg) return undefined;
-  if (fg.type === "named") return fg.name;
-  if (fg.type === "table") return PALETTE_256[fg.index];
-  if (fg.type === "rgb") {
-    const [r, g, b] = fg.rgb;
-    return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
-  }
-  return undefined;
-}
-
-function resolveBgColor(token: ParseToken): string | undefined {
-  const bg = token.background;
-  if (!bg) return undefined;
-  if (bg.type === "named") return bg.name;
-  if (bg.type === "table") return PALETTE_256[bg.index];
-  if (bg.type === "rgb") {
-    const [r, g, b] = bg.rgb;
+function resolveColorField(
+  field: ParseToken["foreground"] | ParseToken["background"],
+): string | undefined {
+  if (!field) return undefined;
+  if (field.type === "named") return field.name;
+  if (field.type === "table") return PALETTE_256[field.index];
+  if (field.type === "rgb") {
+    const [r, g, b] = field.rgb;
     return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
   }
   return undefined;
@@ -52,8 +41,8 @@ function resolveBgColor(token: ParseToken): string | undefined {
  * Render a single ParseToken as an Ink Text element with appropriate style props.
  */
 function TokenSpan({ token }: { token: ParseToken }) {
-  const color = resolveColor(token);
-  const bgColor = resolveBgColor(token);
+  const color = resolveColorField(token.foreground);
+  const bgColor = resolveColorField(token.background);
   const bold = token.decorations.has("bold");
   const dim = token.decorations.has("dim");
   const italic = token.decorations.has("italic");
