@@ -31,4 +31,19 @@ describe("App", () => {
     const { lastFrame } = render(<App {...makeProps()} />);
     expect(lastFrame()).toContain("❯");
   });
+
+  it("shows notifications zone placeholder when empty", () => {
+    const { lastFrame } = render(<App {...makeProps()} />);
+    expect(lastFrame()).toContain("No notifications");
+  });
+
+  it("renders with null server (socket unavailable mode)", () => {
+    const { lastFrame } = render(
+      <App config={{ ...DEFAULT_CONFIG }} server={null} />,
+    );
+    const output = lastFrame() ?? "";
+    expect(output).toContain("gmux");
+    expect(output).toContain("⚠");
+    expect(output).toContain("socket");
+  });
 });

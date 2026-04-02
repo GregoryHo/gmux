@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Box, Text, useApp, useInput } from "ink";
+import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
@@ -7,6 +7,7 @@ import type { Server } from "node:net";
 import type { GmuxConfig } from "./config.js";
 import type { AgentSession, AgentStatus } from "./types.js";
 import { sessionNameFromTarget } from "./utils.js";
+import { calculateZoneHeights, calculateFocusHeight } from "./layout.js";
 import { TmuxPoller } from "./poller.js";
 import { setupSocketServer } from "./socket-server.js";
 import { validateEvent } from "./socket-events.js";
@@ -23,6 +24,8 @@ import {
   CommandInput,
   ClientPicker,
   SessionCreator,
+  Header,
+  SearchInput,
   createNotification,
   addNotification,
 } from "./components/index.js";
@@ -33,7 +36,6 @@ export interface AppProps {
   server: Server | null;
 }
 
-/** UI mode for overlays. */
 type UIMode =
   | { kind: "normal" }
   | { kind: "confirm-kill"; sessionName: string }
@@ -44,6 +46,11 @@ type UIMode =
 
 export function App({ config, server }: AppProps) {
   const { exit } = useApp();
+  const { stdout } = useStdout();
+  const rows = (stdout?.rows ?? 40) - 1;
+  const heights = calculateZoneHeights(rows);
+  const focusHeight = calculateFocusHeight(rows);
+
   const [sessions, setSessions] = useState<AgentSession[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
@@ -52,6 +59,8 @@ export function App({ config, server }: AppProps) {
   const [conversation, setConversation] = useState<ConversationEntry[]>([]);
   const [scrollbackContent, setScrollbackContent] = useState("");
   const [scrollOffset, setScrollOffset] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchActive, setSearchActive] = useState(false);
   const pollerRef = useRef<TmuxPoller | null>(null);
 
   const pushNotification = useCallback((name: string, msg: string) => {
@@ -68,7 +77,7 @@ export function App({ config, server }: AppProps) {
     return () => clearTimeout(timer);
   }, [uiMode]);
 
-  // Socket server setup (skip when server is null — socket unavailable mode)
+  // Socket server setup
   useEffect(() => {
     if (!server) return;
     setupSocketServer(server, (raw: unknown) => {
@@ -118,14 +127,12 @@ export function App({ config, server }: AppProps) {
         }
       }
 
-      // Update prev status map
       const newMap = new Map<string, AgentStatus>();
       for (const s of updated) {
         newMap.set(s.target, s.status);
       }
       prevStatusRef.current = newMap;
 
-      // Only update sessions if something actually changed
       setSessions((prev) => {
         if (prev.length !== updated.length) return updated;
         const changed = updated.some((s, i) => {
@@ -184,21 +191,14 @@ export function App({ config, server }: AppProps) {
 
     try {
       const clients = await listClients();
-      // Exclude gmux's own client by matching our TTY
       const ownTty = process.env["TTY"] ?? "";
       const otherClients = clients.filter((c) => c.tty !== ownTty);
 
       if (otherClients.length === 0) {
         setUIMode({ kind: "flash", message: "No tmux clients available" });
       } else if (otherClients.length === 1) {
-        await switchClient(
-          otherClients[0].name,
-          selectedSession.sessionName,
-        );
-        setUIMode({
-          kind: "flash",
-          message: `Focused ${selectedSession.sessionName}`,
-        });
+        await switchClient(otherClients[0].name, selectedSession.sessionName);
+        setUIMode({ kind: "flash", message: `Focused ${selectedSession.sessionName}` });
       } else {
         setUIMode({ kind: "client-picker", clients: otherClients });
       }
@@ -209,12 +209,10 @@ export function App({ config, server }: AppProps) {
 
   const handleCreateSession = useCallback(
     async (dir: string, name: string, cmd: string) => {
-      // Expand ~ to home directory
       const expandedDir = dir.startsWith("~")
         ? resolve(homedir(), dir.slice(1).replace(/^\//, ""))
         : resolve(dir);
 
-      // Validate directory exists
       try {
         const st = await stat(expandedDir);
         if (!st.isDirectory()) {
@@ -226,30 +224,22 @@ export function App({ config, server }: AppProps) {
         return;
       }
 
-      // Create session
       try {
         await newSession(name, expandedDir);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg.includes("duplicate") || msg.includes("already")) {
-          setUIMode({
-            kind: "flash",
-            message: `Session '${name}' already exists`,
-          });
+          setUIMode({ kind: "flash", message: `Session '${name}' already exists` });
         } else {
-          setUIMode({
-            kind: "flash",
-            message: `Failed to create session: ${msg}`,
-          });
+          setUIMode({ kind: "flash", message: `Failed to create session: ${msg}` });
         }
         return;
       }
 
-      // Send launch command
       try {
         await sendLaunchCommand(name, cmd);
       } catch {
-        // Session was created but command failed — still show success
+        // Session created but command failed — still show success
       }
 
       setUIMode({ kind: "flash", message: `Created session ${name}` });
@@ -258,34 +248,36 @@ export function App({ config, server }: AppProps) {
     [],
   );
 
-  // Handle sendKeys failure: remove pane from sessions, add notification
   const handleSendError = useCallback((target: string, error: Error) => {
     const msg = error.message || "";
-    // Check if the error indicates the pane/session is gone
     if (msg.includes("can't find") || msg.includes("no such") || msg.includes("not found") || msg.includes("failed")) {
-      // Remove the pane from the session list immediately
       setSessions((prev) => prev.filter((s) => s.target !== target));
-
       const name = sessionNameFromTarget(target);
       pushNotification(name, "session ended");
     }
   }, []);
 
-  // Main keybindings
+  const isExpanded = uiMode.kind === "expanded-detail";
+  const isOverview = !isExpanded;
+
+  // Overview keybindings (session navigation + actions)
   useInput(
     (input, key) => {
-      // Quit
       if (input === "q" || (key.ctrl && input === "q")) {
         exit();
+        return;
+      }
+
+      // Search trigger
+      if (input === "/" && !searchActive) {
+        setSearchActive(true);
         return;
       }
 
       // Navigate sessions
       if (key.upArrow || input === "k") {
         setSelectedIndex((prev) =>
-          sessions.length === 0
-            ? 0
-            : (prev - 1 + sessions.length) % sessions.length,
+          sessions.length === 0 ? 0 : (prev - 1 + sessions.length) % sessions.length,
         );
         return;
       }
@@ -296,30 +288,21 @@ export function App({ config, server }: AppProps) {
         return;
       }
 
-      // Ctrl-C: interrupt selected pane
       if (key.ctrl && input === "c") {
-        if (selectedSession) {
-          void interruptPane(selectedSession.target);
-        }
+        if (selectedSession) void interruptPane(selectedSession.target);
         return;
       }
 
-      // Ctrl-K: kill session (show confirmation)
       if (key.ctrl && input === "k") {
         if (selectedSession) {
-          setUIMode({
-            kind: "confirm-kill",
-            sessionName: selectedSession.sessionName,
-          });
+          setUIMode({ kind: "confirm-kill", sessionName: selectedSession.sessionName });
         }
         return;
       }
 
-      // Ctrl-E: expand detail panel (scrollback relay)
       if (key.ctrl && input === "e") {
         if (selectedSession) {
           setScrollOffset(0);
-          // Capture full scrollback on-demand
           captureFullScrollback(selectedSession.target)
             .then((content) => {
               setScrollbackContent(content);
@@ -332,22 +315,46 @@ export function App({ config, server }: AppProps) {
         return;
       }
 
-      // Ctrl-N: create session wizard
       if (key.ctrl && input === "n") {
         setUIMode({ kind: "create-session" });
         return;
       }
 
-      // Ctrl-F: focus selected session
       if (key.ctrl && input === "f") {
         void handleFocusSession();
         return;
       }
     },
-    { isActive: uiMode.kind === "normal" || uiMode.kind === "flash" },
+    { isActive: (uiMode.kind === "normal" || uiMode.kind === "flash") && !searchActive },
   );
 
-  // Expanded detail view keybindings
+  // Search keybindings (active when search bar is open)
+  useInput(
+    (input, key) => {
+      if (key.escape) {
+        setSearchQuery("");
+        setSearchActive(false);
+        return;
+      }
+      if (key.return) {
+        setSearchActive(false);
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setSearchQuery((prev) => prev.slice(0, -1));
+        return;
+      }
+      if (key.ctrl || key.meta) return;
+      if (key.upArrow || key.downArrow || key.leftArrow || key.rightArrow) return;
+      if (key.tab) return;
+      if (input) {
+        setSearchQuery((prev) => prev + input);
+      }
+    },
+    { isActive: searchActive },
+  );
+
+  // Focus mode keybindings (scrollback navigation)
   useInput(
     (input, key) => {
       if (key.escape || (key.ctrl && input === "e")) {
@@ -371,8 +378,12 @@ export function App({ config, server }: AppProps) {
         setScrollOffset((prev) => prev + 10);
         return;
       }
+      if (input === "q" || (key.ctrl && input === "q")) {
+        exit();
+        return;
+      }
     },
-    { isActive: uiMode.kind === "expanded-detail" },
+    { isActive: isExpanded },
   );
 
   // Confirm-kill keybindings
@@ -395,78 +406,74 @@ export function App({ config, server }: AppProps) {
 
   const count = sessions.length;
   const activeCount = sessions.filter((s) => s.status === "active").length;
-  const now = new Date();
-  const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
   return (
-    <Box flexDirection="column">
-      {/* Degraded mode banner */}
-      {degraded ? (
-        <Box paddingX={1}>
-          <Text color="yellow" bold>
-            {"⚠ tmux not reachable — retrying every 5s"}
-          </Text>
+    <Box flexDirection="column" height={rows}>
+      {/* Header — warnings integrated */}
+      <Header
+        sessionCount={count}
+        activeCount={activeCount}
+        degraded={degraded}
+        socketAvailable={server !== null}
+        focusSession={isExpanded ? selectedSession?.target : undefined}
+      />
+
+      {/* Overview: Session List */}
+      {isOverview ? (
+        <Box borderStyle="single" flexDirection="column" height={heights.session + 2}>
+          {searchActive ? (
+            <SearchInput
+              query={searchQuery}
+              onChange={setSearchQuery}
+              onCancel={() => { setSearchQuery(""); setSearchActive(false); }}
+            />
+          ) : null}
+          <SessionList
+            sessions={sessions}
+            selectedIndex={selectedIndex}
+            dimmed={degraded}
+            maxHeight={searchActive ? heights.session - 1 : heights.session}
+            searchQuery={searchQuery || undefined}
+          />
         </Box>
       ) : null}
 
-      {/* Socket unavailable banner */}
-      {server === null ? (
-        <Box paddingX={1}>
-          <Text color="yellow" bold>
-            {"⚠ socket unavailable — polling only"}
-          </Text>
-        </Box>
-      ) : null}
-
-      {/* Header */}
-      <Box borderStyle="single" paddingX={1} justifyContent="space-between">
-        <Box gap={1}>
-          <Text bold>gmux</Text>
-          <Text>
-            — {count} session{count !== 1 ? "s" : ""}
-            {activeCount > 0 ? ` · ${activeCount} active` : ""}
-          </Text>
-        </Box>
-        <Text dimColor>{timeStr}</Text>
-      </Box>
-
-      {/* Session List — dimmed when expanded */}
-      <Box borderStyle="single" flexDirection="column">
-        <SessionList
-          sessions={sessions}
-          selectedIndex={selectedIndex}
-          dimmed={degraded || uiMode.kind === "expanded-detail"}
-        />
-      </Box>
-
-      {/* Detail Panel + Notifications */}
-      <Box borderStyle="single" flexDirection="column">
+      {/* Detail Panel */}
+      <Box borderStyle="single" flexDirection="column"
+        height={isExpanded ? focusHeight : heights.detail + 2}>
         <DetailPanel
           session={selectedSession}
           conversation={conversation}
-          expanded={uiMode.kind === "expanded-detail"}
+          expanded={isExpanded}
           scrollbackContent={scrollbackContent}
           scrollOffset={scrollOffset}
+          visibleLines={isExpanded ? focusHeight - 2 : undefined}
         />
-        {uiMode.kind !== "expanded-detail" && notifications.length > 0 ? (
-          <NotificationFeed events={notifications} maxDisplay={5} />
-        ) : null}
       </Box>
+
+      {/* Overview: Notifications (separate zone) */}
+      {isOverview ? (
+        <Box borderStyle="single" flexDirection="column" height={heights.notify + 2}>
+          {notifications.length > 0 ? (
+            <NotificationFeed events={notifications} maxHeight={heights.notify} />
+          ) : (
+            <Box paddingX={1}>
+              <Text dimColor>No notifications</Text>
+            </Box>
+          )}
+        </Box>
+      ) : null}
 
       {/* Overlays */}
       {uiMode.kind === "confirm-kill" ? (
         <Box paddingX={1}>
-          <Text color="yellow">
-            Kill session {uiMode.sessionName}? (y/n)
-          </Text>
+          <Text color="yellow">Kill session {uiMode.sessionName}? (y/n)</Text>
         </Box>
       ) : null}
 
       {uiMode.kind === "create-session" ? (
         <SessionCreator
-          onCreate={(dir, name, cmd) => {
-            void handleCreateSession(dir, name, cmd);
-          }}
+          onCreate={(dir, name, cmd) => { void handleCreateSession(dir, name, cmd); }}
           onCancel={() => setUIMode({ kind: "normal" })}
         />
       ) : null}
@@ -477,14 +484,8 @@ export function App({ config, server }: AppProps) {
           onSelect={async (client) => {
             if (selectedSession) {
               try {
-                await switchClient(
-                  client.name,
-                  selectedSession.sessionName,
-                );
-                setUIMode({
-                  kind: "flash",
-                  message: `Focused ${selectedSession.sessionName}`,
-                });
+                await switchClient(client.name, selectedSession.sessionName);
+                setUIMode({ kind: "flash", message: `Focused ${selectedSession.sessionName}` });
               } catch {
                 setUIMode({ kind: "flash", message: "Switch failed" });
               }
@@ -503,13 +504,11 @@ export function App({ config, server }: AppProps) {
       ) : null}
 
       {/* Command Input */}
-      <Box borderStyle="single">
-        <CommandInput
-          selectedTarget={selectedSession?.target ?? null}
-          isActive={uiMode.kind === "normal"}
-          onError={handleSendError}
-        />
-      </Box>
+      <CommandInput
+        selectedTarget={selectedSession?.target ?? null}
+        isActive={uiMode.kind === "normal" && !searchActive}
+        onError={handleSendError}
+      />
     </Box>
   );
 }
