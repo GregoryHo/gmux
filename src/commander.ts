@@ -66,10 +66,3 @@ export async function newSession(name: string, dir: string): Promise<void> {
   await runTmux(buildNewSessionArgs(name, dir));
 }
 
-export function buildSendLaunchCommandArgs(name: string, cmd: string): string[] {
-  return ["send-keys", "-t", name, cmd, "Enter"];
-}
-
-export async function sendLaunchCommand(name: string, cmd: string): Promise<void> {
-  await runTmux(buildSendLaunchCommandArgs(name, cmd));
-}

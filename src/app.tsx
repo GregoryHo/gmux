@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Box, Text, useApp, useInput, useStdout } from "ink";
 import { stat } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -14,7 +14,7 @@ import { validateEvent } from "./socket-events.js";
 import { StatusOverrideStore } from "./status-overrides.js";
 import { readConversation, type ConversationEntry } from "./jsonl-reader.js";
 import { captureFullScrollback } from "./tmux.js";
-import { interruptPane, killSession, listClients, switchClient, newSession, sendLaunchCommand } from "./commander.js";
+import { interruptPane, killSession, listClients, switchClient, newSession, sendKeys } from "./commander.js";
 import type { TmuxClient } from "./commander.js";
 import { Notifier } from "./notifier.js";
 import {
@@ -48,8 +48,8 @@ export function App({ config, server }: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const rows = (stdout?.rows ?? 40) - 1;
-  const heights = calculateZoneHeights(rows);
-  const focusHeight = calculateFocusHeight(rows);
+  const heights = useMemo(() => calculateZoneHeights(rows), [rows]);
+  const focusHeight = useMemo(() => calculateFocusHeight(rows), [rows]);
 
   const [sessions, setSessions] = useState<AgentSession[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -59,8 +59,7 @@ export function App({ config, server }: AppProps) {
   const [conversation, setConversation] = useState<ConversationEntry[]>([]);
   const [scrollbackContent, setScrollbackContent] = useState("");
   const [scrollOffset, setScrollOffset] = useState(0);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchActive, setSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState<string | null>(null);
   const pollerRef = useRef<TmuxPoller | null>(null);
 
   const pushNotification = useCallback((name: string, msg: string) => {
@@ -70,14 +69,12 @@ export function App({ config, server }: AppProps) {
   const prevStatusRef = useRef(new Map<string, AgentStatus>());
   const notifierRef = useRef(new Notifier(config));
 
-  // Auto-clear flash messages after 2 seconds
   useEffect(() => {
     if (uiMode.kind !== "flash") return;
     const timer = setTimeout(() => setUIMode({ kind: "normal" }), 2000);
     return () => clearTimeout(timer);
   }, [uiMode]);
 
-  // Socket server setup
   useEffect(() => {
     if (!server) return;
     setupSocketServer(server, (raw: unknown) => {
@@ -97,7 +94,6 @@ export function App({ config, server }: AppProps) {
     });
   }, [server]);
 
-  // Poller setup
   useEffect(() => {
     const poller = new TmuxPoller(config.pollInterval, overridesRef.current);
     pollerRef.current = poller;
@@ -143,7 +139,7 @@ export function App({ config, server }: AppProps) {
         return changed ? updated : prev;
       });
 
-      if (poller.degraded !== degraded) setDegraded(poller.degraded);
+      setDegraded(poller.degraded);
     });
 
     poller.on("error", (err: Error) => {
@@ -159,7 +155,6 @@ export function App({ config, server }: AppProps) {
     };
   }, [config.pollInterval]);
 
-  // Keep selectedIndex in bounds
   useEffect(() => {
     if (sessions.length === 0) {
       setSelectedIndex(0);
@@ -168,15 +163,13 @@ export function App({ config, server }: AppProps) {
     }
   }, [sessions.length, selectedIndex]);
 
-  // Reset selection when search query changes
   useEffect(() => {
-    if (searchQuery) setSelectedIndex(0);
+    if (searchQuery !== null) setSelectedIndex(0);
   }, [searchQuery]);
 
   const selectedSession =
     sessions.length > 0 ? sessions[selectedIndex] ?? null : null;
 
-  // Fetch JSONL conversation when selected session changes
   useEffect(() => {
     if (!selectedSession) {
       setConversation([]);
@@ -242,9 +235,9 @@ export function App({ config, server }: AppProps) {
       }
 
       try {
-        await sendLaunchCommand(name, cmd);
+        await sendKeys(name, cmd);
       } catch {
-        // Session created but command failed — still show success
+        // Session created but command failed
       }
 
       setUIMode({ kind: "flash", message: `Created session ${name}` });
@@ -263,9 +256,8 @@ export function App({ config, server }: AppProps) {
   }, []);
 
   const isExpanded = uiMode.kind === "expanded-detail";
-  const isOverview = !isExpanded;
+  const searchActive = searchQuery !== null;
 
-  // Overview keybindings (session navigation + actions)
   useInput(
     (input, key) => {
       if (input === "q" || (key.ctrl && input === "q")) {
@@ -273,13 +265,11 @@ export function App({ config, server }: AppProps) {
         return;
       }
 
-      // Search trigger
       if (input === "/" && !searchActive) {
-        setSearchActive(true);
+        setSearchQuery("");
         return;
       }
 
-      // Navigate sessions
       if (key.upArrow || input === "k") {
         setSelectedIndex((prev) =>
           sessions.length === 0 ? 0 : (prev - 1 + sessions.length) % sessions.length,
@@ -333,7 +323,6 @@ export function App({ config, server }: AppProps) {
     { isActive: (uiMode.kind === "normal" || uiMode.kind === "flash") && !searchActive },
   );
 
-  // Focus mode keybindings (scrollback navigation)
   useInput(
     (input, key) => {
       if (key.escape || (key.ctrl && input === "e")) {
@@ -365,7 +354,6 @@ export function App({ config, server }: AppProps) {
     { isActive: isExpanded },
   );
 
-  // Confirm-kill keybindings
   useInput(
     (input, key) => {
       if (uiMode.kind !== "confirm-kill") return;
@@ -388,7 +376,6 @@ export function App({ config, server }: AppProps) {
 
   return (
     <Box flexDirection="column" height={rows}>
-      {/* Header — warnings integrated */}
       <Header
         sessionCount={count}
         activeCount={activeCount}
@@ -397,15 +384,13 @@ export function App({ config, server }: AppProps) {
         focusSession={isExpanded ? selectedSession?.target : undefined}
       />
 
-      {/* Overview: Session List */}
-      {isOverview ? (
+      {!isExpanded ? (
         <Box borderStyle="single" flexDirection="column" height={heights.session + 2}>
           {searchActive ? (
             <SearchInput
               query={searchQuery}
               onChange={setSearchQuery}
-              onCancel={() => { setSearchQuery(""); setSearchActive(false); }}
-              isActive={searchActive}
+              onCancel={() => setSearchQuery(null)}
             />
           ) : null}
           <SessionList
@@ -413,12 +398,11 @@ export function App({ config, server }: AppProps) {
             selectedIndex={selectedIndex}
             dimmed={degraded}
             maxHeight={searchActive ? heights.session - 1 : heights.session}
-            searchQuery={searchQuery || undefined}
+            searchQuery={searchQuery ?? undefined}
           />
         </Box>
       ) : null}
 
-      {/* Detail Panel */}
       <Box borderStyle="single" flexDirection="column"
         height={isExpanded ? focusHeight : heights.detail + 2}>
         <DetailPanel
@@ -431,8 +415,7 @@ export function App({ config, server }: AppProps) {
         />
       </Box>
 
-      {/* Overview: Notifications (separate zone) */}
-      {isOverview ? (
+      {!isExpanded ? (
         <Box borderStyle="single" flexDirection="column" height={heights.notify + 2}>
           {notifications.length > 0 ? (
             <NotificationFeed events={notifications} maxHeight={heights.notify} />
@@ -444,7 +427,6 @@ export function App({ config, server }: AppProps) {
         </Box>
       ) : null}
 
-      {/* Overlays */}
       {uiMode.kind === "confirm-kill" ? (
         <Box paddingX={1}>
           <Text color="yellow">Kill session {uiMode.sessionName}? (y/n)</Text>
@@ -483,7 +465,6 @@ export function App({ config, server }: AppProps) {
         </Box>
       ) : null}
 
-      {/* Command Input */}
       <CommandInput
         selectedTarget={selectedSession?.target ?? null}
         isActive={uiMode.kind === "normal" && !searchActive}

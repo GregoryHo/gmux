@@ -1,9 +1,7 @@
 export interface ZoneHeights {
-  header: number;
   session: number;
   detail: number;
   notify: number;
-  input: number;
 }
 
 const HEADER_HEIGHT = 1;
@@ -17,14 +15,12 @@ export function calculateZoneHeights(rows: number): ZoneHeights {
   const detailHeight = Math.max(3, flexRows - sessionHeight - notifyHeight);
 
   return {
-    header: HEADER_HEIGHT,
     session: sessionHeight,
     detail: detailHeight,
     notify: notifyHeight,
-    input: INPUT_HEIGHT,
   };
 }
 
 export function calculateFocusHeight(rows: number): number {
-  return rows - HEADER_HEIGHT - INPUT_HEIGHT; // Box height includes its own borders
+  return rows - HEADER_HEIGHT - INPUT_HEIGHT;
 }

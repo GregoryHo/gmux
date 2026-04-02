@@ -5,8 +5,6 @@ describe("calculateZoneHeights", () => {
   it("calculates zone heights from terminal rows", () => {
     const heights = calculateZoneHeights(40);
 
-    expect(heights.header).toBe(1);
-    expect(heights.input).toBe(1);
     expect(heights.session + heights.detail + heights.notify).toBe(40 - 1 - 1 - 6);
     expect(heights.session).toBeGreaterThanOrEqual(3);
     expect(heights.notify).toBeGreaterThanOrEqual(3);
@@ -30,12 +28,13 @@ describe("calculateZoneHeights", () => {
   it("zone heights plus borders plus fixed rows equal total rows", () => {
     for (const rows of [20, 30, 40, 50, 60, 80]) {
       const heights = calculateZoneHeights(rows);
+      // header(1) + 3 bordered zones (content + 2 border rows each) + input(1)
       const total =
-        heights.header +
-        (heights.session + 2) + // border top + bottom
+        1 +
+        (heights.session + 2) +
         (heights.detail + 2) +
         (heights.notify + 2) +
-        heights.input;
+        1;
       expect(total).toBe(rows);
     }
   });
@@ -44,7 +43,6 @@ describe("calculateZoneHeights", () => {
 describe("calculateFocusHeight", () => {
   it("calculates focus mode height", () => {
     const height = calculateFocusHeight(40);
-    // rows - header(1) - input(1), box height includes its own borders
     expect(height).toBe(38);
   });
 
