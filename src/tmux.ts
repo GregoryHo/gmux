@@ -136,3 +136,28 @@ export async function capturePaneContent(target: string): Promise<string> {
 export async function captureFullScrollback(target: string): Promise<string> {
   return runTmux(["capture-pane", "-t", target, "-p", "-S", "-"]);
 }
+
+/**
+ * Capture a pane's visible content with ANSI escape sequences preserved.
+ * Used for the LIVE detail panel (1s interval). Returns null if pane is gone.
+ */
+export async function capturePaneWithAnsi(target: string): Promise<string | null> {
+  try {
+    return await runTmux(["capture-pane", "-e", "-p", "-t", target]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get the column width of a tmux pane. Returns null if pane is gone.
+ */
+export async function getPaneWidth(target: string): Promise<number | null> {
+  try {
+    const stdout = await runTmux(["display-message", "-t", target, "-p", "#{pane_width}"]);
+    const width = parseInt(stdout.trim(), 10);
+    return Number.isNaN(width) ? null : width;
+  } catch {
+    return null;
+  }
+}

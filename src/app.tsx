@@ -13,7 +13,7 @@ import { setupSocketServer } from "./socket-server.js";
 import { validateEvent } from "./socket-events.js";
 import { StatusOverrideStore } from "./status-overrides.js";
 import { readConversation, type ConversationEntry } from "./jsonl-reader.js";
-import { capturePane, getPaneWidth } from "./live-capture.js";
+import { capturePaneWithAnsi, getPaneWidth } from "./tmux.js";
 import { interruptPane, killSession, listClients, switchClient, newSession, sendKeys } from "./commander.js";
 import type { TmuxClient } from "./commander.js";
 import { Notifier } from "./notifier.js";
@@ -228,18 +228,17 @@ export function App({ config, server, hooksConfigured }: AppProps) {
     if (detailSource !== "live" || !selectedSession) return;
 
     let cancelled = false;
-    // Fetch source pane width once when target changes
-    void getPaneWidth(selectedSession.target).then((w) => {
-      if (!cancelled && w !== null) setSourcePaneWidth(w);
-    });
-
     const tick = async () => {
-      const content = await capturePane(selectedSession.target);
+      const [content, width] = await Promise.all([
+        capturePaneWithAnsi(selectedSession.target),
+        getPaneWidth(selectedSession.target),
+      ]);
       if (cancelled) return;
       if (content === null) {
         setDetailSource("conv");
         return;
       }
+      if (width !== null) setSourcePaneWidth(width);
       if (!detailFrozenRef.current) {
         setLiveContent(content);
       }
