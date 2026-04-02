@@ -131,14 +131,14 @@ function extractText(content: unknown): string | null {
  * Maps CWD → project hash → latest .jsonl → parse last entries.
  *
  * @param cwd The working directory of the tmux pane
- * @param maxExchanges Maximum number of user/assistant pairs to return
+ * @param maxEntries Maximum number of conversation entries (individual messages) to return
  * @returns Array of conversation entries (newest last), or empty array on failure
  */
 export const DEFAULT_CLAUDE_DIR = join(homedir(), ".claude");
 
 export async function readConversation(
   cwd: string,
-  maxExchanges: number = 3,
+  maxEntries: number = 6,
   claudeDir: string = DEFAULT_CLAUDE_DIR,
 ): Promise<ConversationEntry[]> {
   const hash = cwdToProjectHash(cwd);
@@ -148,7 +148,7 @@ export async function readConversation(
   if (!jsonlPath) return [];
 
   // Read more lines than needed since many JSONL lines are tool calls, not conversation
-  const rawLines = await readLastLines(jsonlPath, maxExchanges * 20);
+  const rawLines = await readLastLines(jsonlPath, maxEntries * 20);
 
   const entries: ConversationEntry[] = [];
   for (const line of rawLines) {
@@ -156,6 +156,5 @@ export async function readConversation(
     if (entry) entries.push(entry);
   }
 
-  // Return the last N entries (newest last)
-  return entries.slice(-maxExchanges * 2);
+  return entries.slice(-maxEntries);
 }

@@ -177,7 +177,9 @@ export function App({ config, server }: AppProps) {
     }
 
     let cancelled = false;
-    readConversation(selectedSession.cwd, 3).then((entries) => {
+    // Fill the detail zone: 1 line for metadata header, rest for conversation
+    const maxEntries = Math.max(3, heights.detail - 1);
+    readConversation(selectedSession.cwd, maxEntries).then((entries) => {
       if (!cancelled) setConversation(entries);
     });
 
