@@ -138,6 +138,86 @@ describe("addNotification", () => {
   });
 });
 
+describe("urgencyColor", () => {
+  // We import and test the exported function directly for unit testing.
+  // ink-testing-library cannot verify color props, but we verify render output.
+  it("returns yellow for messages containing 'needs input'", async () => {
+    const { urgencyColor } = await import("../components/notification-feed.js");
+    expect(urgencyColor("Session needs input from you")).toEqual({ color: "yellow" });
+  });
+
+  it("returns yellow for messages containing 'attention'", async () => {
+    const { urgencyColor } = await import("../components/notification-feed.js");
+    expect(urgencyColor("Requires your attention now")).toEqual({ color: "yellow" });
+  });
+
+  it("returns green for messages containing 'finished'", async () => {
+    const { urgencyColor } = await import("../components/notification-feed.js");
+    expect(urgencyColor("Task finished successfully")).toEqual({ color: "green" });
+  });
+
+  it("returns green for messages containing 'completed'", async () => {
+    const { urgencyColor } = await import("../components/notification-feed.js");
+    expect(urgencyColor("Build completed")).toEqual({ color: "green" });
+  });
+
+  it("returns dim red for messages containing 'session ended'", async () => {
+    const { urgencyColor } = await import("../components/notification-feed.js");
+    expect(urgencyColor("session ended unexpectedly")).toEqual({ color: "red", dimColor: true });
+  });
+
+  it("returns dim red for messages containing 'killed'", async () => {
+    const { urgencyColor } = await import("../components/notification-feed.js");
+    expect(urgencyColor("Process was killed")).toEqual({ color: "red", dimColor: true });
+  });
+
+  it("returns dimColor only for unrecognized messages", async () => {
+    const { urgencyColor } = await import("../components/notification-feed.js");
+    expect(urgencyColor("something random happened")).toEqual({ dimColor: true });
+  });
+
+  it("is case-insensitive", async () => {
+    const { urgencyColor } = await import("../components/notification-feed.js");
+    expect(urgencyColor("NEEDS INPUT")).toEqual({ color: "yellow" });
+    expect(urgencyColor("FINISHED")).toEqual({ color: "green" });
+    expect(urgencyColor("SESSION ENDED")).toEqual({ color: "red", dimColor: true });
+  });
+});
+
+describe("NotificationFeed urgency rendering", () => {
+  it("renders 'needs input' notification with message text visible", () => {
+    const events: NotificationEvent[] = [
+      { id: 1, sessionName: "myapp", message: "Session needs input from you", timestamp: Date.now() },
+    ];
+    const { lastFrame } = render(<NotificationFeed events={events} />);
+    expect(lastFrame()).toContain("Session needs input from you");
+  });
+
+  it("renders 'finished' notification with message text visible", () => {
+    const events: NotificationEvent[] = [
+      { id: 1, sessionName: "myapp", message: "Task finished successfully", timestamp: Date.now() },
+    ];
+    const { lastFrame } = render(<NotificationFeed events={events} />);
+    expect(lastFrame()).toContain("Task finished successfully");
+  });
+
+  it("renders 'session ended' notification with message text visible", () => {
+    const events: NotificationEvent[] = [
+      { id: 1, sessionName: "myapp", message: "session ended unexpectedly", timestamp: Date.now() },
+    ];
+    const { lastFrame } = render(<NotificationFeed events={events} />);
+    expect(lastFrame()).toContain("session ended unexpectedly");
+  });
+
+  it("renders unrecognized notification with message text visible", () => {
+    const events: NotificationEvent[] = [
+      { id: 1, sessionName: "myapp", message: "something happened", timestamp: Date.now() },
+    ];
+    const { lastFrame } = render(<NotificationFeed events={events} />);
+    expect(lastFrame()).toContain("something happened");
+  });
+});
+
 describe("NotificationFeed with maxHeight", () => {
   it("limits displayed events to maxHeight", () => {
     const events = Array.from({ length: 10 }, (_, i) =>

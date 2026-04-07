@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<detail id="hooks-v2" title="Hook Integration (v1.2)">
+
+  <requirement id="fr-hooks-001">
+    <title>Fix hook scripts — correct session/pane extraction</title>
+    <description>Replace broken $TMUX_PANE usage in hook scripts with tmux display-message
+    to correctly extract session name and window.pane target. Both gmux-status.sh and
+    gmux-notify.sh must be fixed.</description>
+    <trace>REQ-F035</trace>
+    <acceptance_criteria>
+      <criterion id="fr-hooks-001-ac1">
+        Given a hook script runs inside a tmux pane in session "arcforge" window 1 pane 1,
+        when the script extracts session and pane values,
+        then SESSION="arcforge" and PANE="1.1" (via tmux display-message -p).
+      </criterion>
+      <criterion id="fr-hooks-001-ac2">
+        Given tmux display-message fails (not inside tmux),
+        when the script runs,
+        then SESSION and PANE fall back to "unknown" and the script exits 0.
+      </criterion>
+      <criterion id="fr-hooks-001-ac3">
+        Given the socket at /tmp/gmux.sock does not exist,
+        when the hook script runs,
+        then it exits 0 without error output (unchanged from current behavior).
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-hooks-002">
+    <title>Notification hook for instant needs_attention detection</title>
+    <description>A new hook script (gmux-attention.sh) listens to Claude Code's Notification
+    event and sends a needs_attention status via the gmux socket. This provides instant
+    detection of permission dialogs without waiting for the 3s poll + heuristic cycle.</description>
+    <trace>REQ-F036</trace>
+    <acceptance_criteria>
+      <criterion id="fr-hooks-002-ac1">
+        Given Claude Code fires a Notification event (e.g., permission dialog),
+        when gmux-attention.sh runs,
+        then it sends {"event":"status","session":"...","pane":"...","status":"needs_attention"} to /tmp/gmux.sock.
+      </criterion>
+      <criterion id="fr-hooks-002-ac2">
+        Given the Notification hook fires,
+        when gmux receives the socket event,
+        then the session status immediately updates to needs_attention (no 3s poll delay).
+      </criterion>
+      <criterion id="fr-hooks-002-ac3">
+        Given the socket is unavailable,
+        when gmux-attention.sh runs,
+        then it exits 0 silently (fire-and-forget).
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-hooks-003">
+    <title>Hook detection at startup</title>
+    <description>On startup, gmux reads ~/.claude/settings.json and checks whether gmux
+    hook entries are configured. If hooks are missing, a warning is shown in the header.</description>
+    <trace>REQ-F032, REQ-F033</trace>
+    <acceptance_criteria>
+      <criterion id="fr-hooks-003-ac1">
+        Given ~/.claude/settings.json contains Stop and Notification hooks referencing gmux scripts,
+        when gmux starts,
+        then hooksConfigured is true and no warning is shown.
+      </criterion>
+      <criterion id="fr-hooks-003-ac2">
+        Given ~/.claude/settings.json does not exist,
+        when gmux starts,
+        then hooksConfigured is false and header shows "⚠ hooks" in yellow.
+      </criterion>
+      <criterion id="fr-hooks-003-ac3">
+        Given ~/.claude/settings.json exists but contains no gmux hook entries,
+        when gmux starts,
+        then hooksConfigured is false and header shows "⚠ hooks".
+      </criterion>
+      <criterion id="fr-hooks-003-ac4">
+        Given ~/.claude/settings.json contains malformed JSON,
+        when gmux starts,
+        then hooksConfigured is false (treated as missing). gmux does not crash.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-hooks-004">
+    <title>gmux --setup-hooks CLI command</title>
+    <description>A CLI command that writes Stop and Notification hook entries into
+    ~/.claude/settings.json at user scope. Resolves hook script paths to absolute.
+    Idempotent — running twice does not duplicate entries. Preserves existing settings.</description>
+    <trace>REQ-F034, REQ-N010</trace>
+    <acceptance_criteria>
+      <criterion id="fr-hooks-004-ac1">
+        Given ~/.claude/settings.json does not exist,
+        when user runs gmux --setup-hooks,
+        then the file is created with Stop and Notification hook entries pointing to absolute paths of gmux-status.sh and gmux-attention.sh.
+      </criterion>
+      <criterion id="fr-hooks-004-ac2">
+        Given ~/.claude/settings.json exists with other settings (e.g., permissions),
+        when user runs gmux --setup-hooks,
+        then gmux hook entries are added and existing settings are preserved.
+      </criterion>
+      <criterion id="fr-hooks-004-ac3">
+        Given gmux --setup-hooks has already been run,
+        when user runs it again,
+        then no duplicate entries are created (idempotent).
+      </criterion>
+      <criterion id="fr-hooks-004-ac4">
+        Given the write to settings.json fails (permission denied),
+        when gmux --setup-hooks runs,
+        then an error message is printed and the process exits with code 1. The original file is not corrupted.
+      </criterion>
+      <criterion id="fr-hooks-004-ac5">
+        Given gmux --setup-hooks succeeds,
+        when the command completes,
+        then a confirmation message is printed and the process exits with code 0 (no dashboard render).
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+</detail>

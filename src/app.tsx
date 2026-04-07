@@ -13,7 +13,7 @@ import { setupSocketServer } from "./socket-server.js";
 import { validateEvent } from "./socket-events.js";
 import { StatusOverrideStore } from "./status-overrides.js";
 import { readConversation, type ConversationEntry } from "./jsonl-reader.js";
-import { captureFullScrollback } from "./tmux.js";
+import { capturePaneWithAnsi, getPaneWidth } from "./tmux.js";
 import { interruptPane, killSession, listClients, switchClient, newSession, sendKeys } from "./commander.js";
 import type { TmuxClient } from "./commander.js";
 import { Notifier } from "./notifier.js";
@@ -34,6 +34,7 @@ import type { NotificationEvent } from "./components/index.js";
 export interface AppProps {
   config: GmuxConfig;
   server: Server | null;
+  hooksConfigured?: boolean;
 }
 
 type UIMode =
@@ -41,10 +42,11 @@ type UIMode =
   | { kind: "confirm-kill"; sessionName: string }
   | { kind: "client-picker"; clients: TmuxClient[] }
   | { kind: "create-session" }
-  | { kind: "expanded-detail" }
   | { kind: "flash"; message: string };
 
-export function App({ config, server }: AppProps) {
+type DetailSource = "live" | "conv";
+
+export function App({ config, server, hooksConfigured }: AppProps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const rows = (stdout?.rows ?? 40) - 1;
@@ -53,15 +55,32 @@ export function App({ config, server }: AppProps) {
   const focusHeight = useMemo(() => calculateFocusHeight(rows), [rows]);
 
   const [sessions, setSessions] = useState<AgentSession[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationEvent[]>([]);
   const [uiMode, setUIMode] = useState<UIMode>({ kind: "normal" });
   const [degraded, setDegraded] = useState(false);
   const [conversation, setConversation] = useState<ConversationEntry[]>([]);
-  const [scrollbackContent, setScrollbackContent] = useState("");
+  const [detailSource, setDetailSource] = useState<DetailSource>("live");
+  const [detailFrozen, setDetailFrozen] = useState(false);
+  const [liveContent, setLiveContent] = useState("");
+  const [sourcePaneWidth, setSourcePaneWidth] = useState<number | null>(null);
+  const [paneAlive, setPaneAlive] = useState(true);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [searchQuery, setSearchQuery] = useState<string | null>(null);
+  const [searchInputActive, setSearchInputActive] = useState(false);
   const pollerRef = useRef<TmuxPoller | null>(null);
+
+  const visibleSessions = useMemo(() => {
+    if (searchQuery === null) return sessions;
+    return sessions.filter((s) =>
+      s.sessionName.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [sessions, searchQuery]);
+
+  const selectedIndex = useMemo(() => {
+    if (!selectedTarget || visibleSessions.length === 0) return -1;
+    return visibleSessions.findIndex((s) => s.target === selectedTarget);
+  }, [selectedTarget, visibleSessions]);
 
   const pushNotification = useCallback((name: string, msg: string) => {
     setNotifications((prev) => addNotification(prev, createNotification(name, msg)));
@@ -157,25 +176,34 @@ export function App({ config, server }: AppProps) {
   }, [config.pollInterval]);
 
   useEffect(() => {
-    if (sessions.length === 0) {
-      setSelectedIndex(0);
-    } else if (selectedIndex >= sessions.length) {
-      setSelectedIndex(sessions.length - 1);
+    if (visibleSessions.length === 0) {
+      if (selectedTarget !== null) setSelectedTarget(null);
+      return;
     }
-  }, [sessions.length, selectedIndex]);
+    if (selectedIndex < 0) {
+      setSelectedTarget(visibleSessions[0].target);
+    }
+  }, [visibleSessions, selectedIndex, selectedTarget]);
 
   useEffect(() => {
-    if (searchQuery !== null) setSelectedIndex(0);
+    if (searchQuery !== null && visibleSessions.length > 0) {
+      setSelectedTarget(visibleSessions[0].target);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
   const selectedSession =
-    sessions.length > 0 ? sessions[selectedIndex] ?? null : null;
+    selectedIndex >= 0
+      ? visibleSessions[selectedIndex] ?? null
+      : visibleSessions[0] ?? null;
 
   useEffect(() => {
     if (!selectedSession) {
       setConversation([]);
       return;
     }
+    // Don't refresh conversation when frozen (spec fr-detail-003-ac7)
+    if (detailFrozen && detailSource === "conv") return;
 
     const maxEntries = Math.max(3, heights.detail - 1);
     const fetchConversation = () => {
@@ -191,7 +219,40 @@ export function App({ config, server }: AppProps) {
     const timer = setInterval(fetchConversation, config.pollInterval);
 
     return () => clearInterval(timer);
-  }, [selectedSession?.target, config.pollInterval, heights.detail]);
+  }, [selectedSession?.target, config.pollInterval, heights.detail, detailFrozen, detailSource]);
+
+  // Track frozen state in a ref so the capture timer can read it without restarting
+  const detailFrozenRef = useRef(detailFrozen);
+  useEffect(() => { detailFrozenRef.current = detailFrozen; }, [detailFrozen]);
+
+  useEffect(() => {
+    if (detailSource !== "live" || !selectedSession) return;
+    setPaneAlive(true);
+
+    let cancelled = false;
+    const tick = async () => {
+      const [content, width] = await Promise.all([
+        capturePaneWithAnsi(selectedSession.target),
+        getPaneWidth(selectedSession.target),
+      ]);
+      if (cancelled) return;
+      if (content === null) {
+        setPaneAlive(false);
+        setDetailSource("conv");
+        return;
+      }
+      setPaneAlive(true);
+      if (width !== null) setSourcePaneWidth(width);
+      if (!detailFrozenRef.current) {
+        setLiveContent(content);
+      }
+      if (!cancelled) timer = setTimeout(tick, 1000);
+    };
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    void tick();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
+  }, [selectedSession?.target, detailSource]);
 
   const handleFocusSession = useCallback(async () => {
     if (!selectedSession) return;
@@ -264,28 +325,33 @@ export function App({ config, server }: AppProps) {
     }
   }, []);
 
-  const isExpanded = uiMode.kind === "expanded-detail";
   const searchActive = searchQuery !== null;
 
-  const selectPrev = () => setSelectedIndex((prev) =>
-    sessions.length === 0 ? 0 : (prev - 1 + sessions.length) % sessions.length,
-  );
-  const selectNext = () => setSelectedIndex((prev) =>
-    sessions.length === 0 ? 0 : (prev + 1) % sessions.length,
-  );
+  const selectPrev = () => {
+    if (visibleSessions.length === 0) return;
+    const cur = Math.max(0, selectedIndex);
+    const prev = (cur - 1 + visibleSessions.length) % visibleSessions.length;
+    setSelectedTarget(visibleSessions[prev].target);
+  };
+  const selectNext = () => {
+    if (visibleSessions.length === 0) return;
+    const cur = Math.max(0, selectedIndex);
+    const next = (cur + 1) % visibleSessions.length;
+    setSelectedTarget(visibleSessions[next].target);
+  };
 
   useInput(
     (_input, key) => {
       if (key.upArrow) { selectPrev(); return; }
       if (key.downArrow) { selectNext(); }
     },
-    { isActive: !isExpanded && uiMode.kind !== "confirm-kill" },
+    { isActive: !detailFrozen && uiMode.kind !== "confirm-kill" },
   );
 
   useInput(
     (input, key) => {
       if (input === "q" || (key.ctrl && input === "q")) { exit(); return; }
-      if (input === "/") { setSearchQuery(""); return; }
+      if (input === "/") { setSearchQuery(""); setSearchInputActive(true); return; }
       if (input === "k") { selectPrev(); return; }
       if (input === "j") { selectNext(); return; }
 
@@ -301,17 +367,27 @@ export function App({ config, server }: AppProps) {
         return;
       }
 
+      if (key.tab) {
+        // Only toggle if pane is alive (check if selectedSession is in sessions)
+        const paneAlive = selectedSession && sessions.some(s => s.target === selectedSession.target);
+        if (paneAlive) {
+          setDetailSource(prev => prev === "live" ? "conv" : "live");
+          setDetailFrozen(false);
+        }
+        return;
+      }
+
       if (key.ctrl && input === "e") {
-        if (selectedSession) {
-          setScrollOffset(0);
-          captureFullScrollback(selectedSession.target)
-            .then((content) => {
-              setScrollbackContent(content);
-              setUIMode({ kind: "expanded-detail" });
-            })
-            .catch(() => {
-              setUIMode({ kind: "flash", message: "Failed to capture scrollback" });
-            });
+        if (detailFrozen) {
+          // Unfreeze
+          setDetailFrozen(false);
+        } else if (selectedSession) {
+          // Freeze — set scroll offset to bottom
+          const content = detailSource === "live" ? liveContent : "";
+          const lines = content.split("\n");
+          const visible = heights.detail;
+          setScrollOffset(Math.max(0, lines.length - visible));
+          setDetailFrozen(true);
         }
         return;
       }
@@ -326,38 +402,40 @@ export function App({ config, server }: AppProps) {
         return;
       }
     },
-    { isActive: (uiMode.kind === "normal" || uiMode.kind === "flash") && !searchActive },
+    { isActive: (uiMode.kind === "normal" || uiMode.kind === "flash") && !searchInputActive },
   );
 
   useInput(
     (input, key) => {
-      if (key.escape || (key.ctrl && input === "e")) {
-        setScrollbackContent("");
-        setUIMode({ kind: "normal" });
+      if (key.escape) {
+        setDetailFrozen(false);
+        return;
+      }
+      if (key.ctrl && input === "e") {
+        setDetailFrozen(false);
         return;
       }
       if (key.upArrow || input === "k") {
-        setScrollOffset((prev) => Math.max(0, prev - 1));
+        setScrollOffset(prev => Math.max(0, prev - 1));
         return;
       }
       if (key.downArrow || input === "j") {
-        setScrollOffset((prev) => prev + 1);
+        setScrollOffset(prev => prev + 1);
         return;
       }
       if (key.ctrl && input === "u") {
-        setScrollOffset((prev) => Math.max(0, prev - 10));
+        setScrollOffset(prev => Math.max(0, prev - 10));
         return;
       }
       if (key.ctrl && input === "d") {
-        setScrollOffset((prev) => prev + 10);
+        setScrollOffset(prev => prev + 10);
         return;
       }
       if (input === "q" || (key.ctrl && input === "q")) {
         exit();
-        return;
       }
     },
-    { isActive: isExpanded },
+    { isActive: detailFrozen },
   );
 
   useInput(
@@ -387,42 +465,49 @@ export function App({ config, server }: AppProps) {
         activeCount={activeCount}
         degraded={degraded}
         socketAvailable={server !== null}
-        focusSession={isExpanded ? selectedSession?.target : undefined}
+        hooksConfigured={hooksConfigured}
+        focusSession={detailFrozen ? selectedSession?.target : undefined}
       />
 
-      {!isExpanded ? (
+      {!detailFrozen ? (
         <Box borderStyle="single" flexDirection="column" height={heights.session + 2}>
           {searchActive ? (
             <SearchInput
               query={searchQuery}
               onChange={setSearchQuery}
-              onCancel={() => setSearchQuery(null)}
+              onCancel={() => { setSearchQuery(null); setSearchInputActive(false); }}
+              onAccept={() => setSearchInputActive(false)}
+              isActive={searchInputActive}
+              matchCount={visibleSessions.length}
+              totalCount={sessions.length}
             />
           ) : null}
           <SessionList
-            sessions={sessions}
-            selectedIndex={selectedIndex}
+            sessions={visibleSessions}
+            selectedTarget={selectedTarget}
             dimmed={degraded}
             maxHeight={searchActive ? heights.session - 1 : heights.session}
-            searchQuery={searchQuery ?? undefined}
           />
         </Box>
       ) : null}
 
-      <Box borderStyle="single" flexDirection="column"
-        height={isExpanded ? focusHeight : heights.detail + 2}>
+      <Box borderStyle="single" flexDirection="column" overflow="hidden"
+        height={detailFrozen ? focusHeight : heights.detail + 2}>
         <DetailPanel
           session={selectedSession}
+          source={detailSource}
+          frozen={detailFrozen}
+          liveContent={liveContent}
           conversation={conversation}
-          expanded={isExpanded}
-          scrollbackContent={scrollbackContent}
           scrollOffset={scrollOffset}
-          visibleLines={isExpanded ? focusHeight - 2 : heights.detail}
+          visibleLines={detailFrozen ? focusHeight - 2 : heights.detail}
           terminalWidth={cols}
+          sourcePaneWidth={sourcePaneWidth}
+          paneAlive={paneAlive}
         />
       </Box>
 
-      {!isExpanded ? (
+      {!detailFrozen ? (
         <Box borderStyle="single" flexDirection="column" height={heights.notify + 2}>
           {notifications.length > 0 ? (
             <NotificationFeed events={notifications} maxHeight={heights.notify} />
@@ -474,7 +559,7 @@ export function App({ config, server }: AppProps) {
 
       <CommandInput
         selectedTarget={selectedSession?.target ?? null}
-        isActive={uiMode.kind === "normal" && !searchActive}
+        isActive={uiMode.kind === "normal" && !searchInputActive}
         onError={handleSendError}
       />
     </Box>

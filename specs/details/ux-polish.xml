@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<detail id="ux-polish" title="UX Polish (v1.2)">
+
+  <requirement id="fr-ux-001">
+    <title>Identity-based selection</title>
+    <description>Replace selectedIndex (number) with selectedTarget (string | null) that
+    tracks the tmux target address of the selected session. Selection resolves against
+    the current visible (possibly filtered) session list on each render.</description>
+    <trace>REQ-F024, REQ-F025</trace>
+    <acceptance_criteria>
+      <criterion id="fr-ux-001-ac1">
+        Given selectedTarget is "arcforge:1.1" and the visible session list contains arcforge:1.1,
+        when the session list renders,
+        then the arcforge:1.1 row shows the ▸ indicator.
+      </criterion>
+      <criterion id="fr-ux-001-ac2">
+        Given selectedTarget is "arcforge:1.1" but arcforge:1.1 is filtered out by search,
+        when the session list renders,
+        then selectedTarget auto-updates to the first visible session's target.
+      </criterion>
+      <criterion id="fr-ux-001-ac3">
+        Given the visible session list is empty (all filtered out or no sessions),
+        when the session list renders,
+        then selectedTarget is null.
+      </criterion>
+      <criterion id="fr-ux-001-ac4">
+        Given user presses j/k,
+        when navigating the session list,
+        then selectedTarget updates to the next/previous session's target within the visible list.
+      </criterion>
+      <criterion id="fr-ux-001-ac5">
+        Given selectedTarget is "workspace:1.1" and workspace:1.1 disappears between polls,
+        when the session list re-renders,
+        then selectedTarget auto-updates to the first visible session.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-ux-002">
+    <title>Search visual improvements</title>
+    <description>The search bar gets distinct visual styling and feedback to make the
+    search mode clearly identifiable and the results transparent.</description>
+    <trace>REQ-F026, REQ-F027</trace>
+    <acceptance_criteria>
+      <criterion id="fr-ux-002-ac1">
+        Given search mode is active with query "arc",
+        when the search bar renders,
+        then it shows an inverse-color (white-on-cyan) bar: "/ arc  2/5" where 2/5 is match count / total.
+      </criterion>
+      <criterion id="fr-ux-002-ac2">
+        Given search mode is active,
+        when user presses j/k,
+        then the selection navigates within the filtered results (not blocked).
+      </criterion>
+      <criterion id="fr-ux-002-ac3">
+        Given search mode is active with query "arc",
+        when user presses Enter,
+        then search input deactivates (no more typing), filter remains active, j/k and command input resume.
+      </criterion>
+      <criterion id="fr-ux-002-ac4">
+        Given search mode is active,
+        when user presses Esc,
+        then search is cancelled: query is cleared, filter removed, full session list restored.
+      </criterion>
+      <criterion id="fr-ux-002-ac5">
+        Given search mode activates (user presses /),
+        when the search bar appears,
+        then selectedTarget resets to the first session in the filtered results.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-ux-003">
+    <title>Status dot colors</title>
+    <description>Status indicator dots in the session list use per-status colors for
+    at-a-glance monitoring from a distance.</description>
+    <trace>REQ-F028</trace>
+    <acceptance_criteria>
+      <criterion id="fr-ux-003-ac1">
+        Given a session with status "active",
+        when the session row renders,
+        then the ● dot is rendered in green.
+      </criterion>
+      <criterion id="fr-ux-003-ac2">
+        Given a session with status "idle",
+        when the session row renders,
+        then the ○ dot is rendered with dimColor (default dim foreground).
+      </criterion>
+      <criterion id="fr-ux-003-ac3">
+        Given a session with status "needs_attention",
+        when the session row renders,
+        then the ⚡ dot is rendered in yellow.
+      </criterion>
+      <criterion id="fr-ux-003-ac4">
+        Given a session with status "unknown",
+        when the session row renders,
+        then the ? dot is rendered in dim red.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-ux-004">
+    <title>Selected row background highlight</title>
+    <description>The currently selected session row gets a subtle background color
+    to make the selection visible at a glance, beyond the ▸ indicator.</description>
+    <trace>REQ-F029</trace>
+    <acceptance_criteria>
+      <criterion id="fr-ux-004-ac1">
+        Given arcforge:1.1 is selected,
+        when the session list renders,
+        then the arcforge:1.1 row has backgroundColor="gray" on its Box container.
+      </criterion>
+      <criterion id="fr-ux-004-ac2">
+        Given arcforge:1.1 is selected and workspace:1.1 is not,
+        when the session list renders,
+        then only arcforge:1.1 has the background highlight.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-ux-005">
+    <title>Notification feed urgency colors</title>
+    <description>Notification events in the feed are colored by type to create a consistent
+    visual language matching the session list status colors.</description>
+    <trace>REQ-F030</trace>
+    <acceptance_criteria>
+      <criterion id="fr-ux-005-ac1">
+        Given a notification with message containing "needs input" or "attention",
+        when the notification feed renders,
+        then the notification text is yellow.
+      </criterion>
+      <criterion id="fr-ux-005-ac2">
+        Given a notification with message containing "finished" or "completed",
+        when the notification feed renders,
+        then the notification text is green.
+      </criterion>
+      <criterion id="fr-ux-005-ac3">
+        Given a notification with message containing "session ended" or "killed",
+        when the notification feed renders,
+        then the notification text is dim red.
+      </criterion>
+      <criterion id="fr-ux-005-ac4">
+        Given a notification with an unrecognized message type,
+        when the notification feed renders,
+        then the notification text uses default dimColor.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+</detail>

@@ -1,11 +1,22 @@
 import { describe, it, expect } from "vitest";
-import { stat } from "node:fs/promises";
+import { stat, readFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 
 const HOOKS_DIR = join(import.meta.dirname, "../../hooks");
 
 describe("hook scripts", () => {
+  it("gmux-attention.sh exists and sends needs_attention status", async () => {
+    const content = await readFile(
+      join(HOOKS_DIR, "gmux-attention.sh"),
+      "utf8",
+    );
+    expect(content).toContain("needs_attention");
+    expect(content).toContain("tmux display-message");
+    expect(content).toContain("/tmp/gmux.sock");
+    expect(content).toContain("exit 0");
+  });
+
   it("gmux-status.sh is executable", async () => {
     const info = await stat(join(HOOKS_DIR, "gmux-status.sh"));
     // Check owner execute bit (0o100)
@@ -25,6 +36,24 @@ describe("hook scripts", () => {
   it("gmux-notify.sh exits 0 when socket does not exist", async () => {
     const exitCode = await runScript(join(HOOKS_DIR, "gmux-notify.sh"));
     expect(exitCode).toBe(0);
+  });
+
+  it("gmux-status.sh uses tmux display-message for session and pane", async () => {
+    const content = await readFile(
+      join(HOOKS_DIR, "gmux-status.sh"),
+      "utf-8",
+    );
+    expect(content).toContain("tmux display-message");
+    expect(content).not.toContain('SESSION="${TMUX_PANE');
+  });
+
+  it("gmux-notify.sh uses tmux display-message for session and pane", async () => {
+    const content = await readFile(
+      join(HOOKS_DIR, "gmux-notify.sh"),
+      "utf-8",
+    );
+    expect(content).toContain("tmux display-message");
+    expect(content).not.toContain('SESSION="${TMUX_PANE');
   });
 });
 

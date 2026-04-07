@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<detail id="detail-panel-v2" title="Detail Panel Redesign (v1.2)">
+
+  <requirement id="fr-detail-001">
+    <title>LIVE terminal source</title>
+    <description>Detail panel default mode captures the selected pane's terminal content
+    via tmux capture-pane -e -p every 1 second (hardcoded interval). Only the selected
+    pane is captured (not all panes). Content auto-scrolls to bottom (latest visible).
+    ANSI escape sequences from -e flag are parsed into Ink colored Text components
+    using ansi-sequence-parser or equivalent.</description>
+    <trace>REQ-F019, REQ-N009</trace>
+    <acceptance_criteria>
+      <criterion id="fr-detail-001-ac1">
+        Given session arcforge:1.1 is selected and in LIVE mode,
+        when 1 second elapses,
+        then capture-pane -e -p -t arcforge:1.1 is called and the result replaces the detail content.
+      </criterion>
+      <criterion id="fr-detail-001-ac2">
+        Given new capture content arrives,
+        when the detail panel renders,
+        then the view is scrolled to the bottom (latest content visible).
+      </criterion>
+      <criterion id="fr-detail-001-ac3">
+        Given the captured content contains ANSI escape sequences (colors, bold, dim),
+        when the detail panel renders in LIVE mode,
+        then the sequences are parsed and rendered as colored Ink Text components (not displayed as raw escape codes, not stripped).
+      </criterion>
+      <criterion id="fr-detail-001-ac4">
+        Given user switches selected session from arcforge:1.1 to workspace:1.1,
+        when the selection changes,
+        then the old capture timer is cleared and a new timer starts for workspace:1.1.
+      </criterion>
+      <criterion id="fr-detail-001-ac5">
+        Given capture-pane fails (pane gone, tmux error),
+        when the timer fires,
+        then the error is handled gracefully — auto-fallback to CONV mode with "session ended" indicator (see fr-detail-004).
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-detail-002">
+    <title>CONV conversation source</title>
+    <description>Tab toggles the detail panel to CONV mode, showing JSONL conversation
+    preview via the existing readConversation logic. Refreshes every poll cycle (~3s).
+    Shows structured "You: / AI:" conversation entries. Persists when pane dies.</description>
+    <trace>REQ-F020, REQ-F021</trace>
+    <acceptance_criteria>
+      <criterion id="fr-detail-002-ac1">
+        Given user presses Tab while in LIVE mode,
+        when the detail panel switches to CONV mode,
+        then the live capture timer stops and the JSONL conversation preview is displayed.
+      </criterion>
+      <criterion id="fr-detail-002-ac2">
+        Given user presses Tab while in CONV mode,
+        when the detail panel switches to LIVE mode,
+        then the live capture timer starts and terminal content is displayed.
+      </criterion>
+      <criterion id="fr-detail-002-ac3">
+        Given the detail panel is in CONV mode,
+        when the poll cycle fires (~3s),
+        then the conversation entries refresh from the JSONL file.
+      </criterion>
+      <criterion id="fr-detail-002-ac4">
+        Given the selected pane has died,
+        when the detail panel is in CONV mode,
+        then the JSONL conversation remains visible (data persists on disk).
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-detail-003">
+    <title>Freeze mode (Ctrl-E)</title>
+    <description>Ctrl-E freezes the detail panel content in either source mode. The frozen
+    view starts from the bottom (latest content visible first). j/k scrolls 1 line
+    (j=older/up, k=newer/down). Ctrl-U/D scrolls 10 lines. Esc unfreezes and resumes
+    the following state.</description>
+    <trace>REQ-F022</trace>
+    <acceptance_criteria>
+      <criterion id="fr-detail-003-ac1">
+        Given the detail panel is in LIVE following mode,
+        when user presses Ctrl-E,
+        then the content is frozen (capture timer continues but UI does not update)
+        and scroll offset is set to show the bottom of the content.
+      </criterion>
+      <criterion id="fr-detail-003-ac2">
+        Given the detail panel is frozen,
+        when user presses j or up-arrow,
+        then the view scrolls up 1 line (toward older content).
+      </criterion>
+      <criterion id="fr-detail-003-ac3">
+        Given the detail panel is frozen,
+        when user presses k or down-arrow,
+        then the view scrolls down 1 line (toward newer content).
+      </criterion>
+      <criterion id="fr-detail-003-ac4">
+        Given the detail panel is frozen,
+        when user presses Ctrl-U,
+        then the view scrolls up 10 lines.
+      </criterion>
+      <criterion id="fr-detail-003-ac5">
+        Given the detail panel is frozen,
+        when user presses Ctrl-D,
+        then the view scrolls down 10 lines.
+      </criterion>
+      <criterion id="fr-detail-003-ac6">
+        Given the detail panel is frozen,
+        when user presses Esc,
+        then the view unfreezes and resumes following (auto-scroll to bottom in LIVE, refresh in CONV).
+      </criterion>
+      <criterion id="fr-detail-003-ac7">
+        Given the detail panel is frozen in CONV mode,
+        when the panel renders,
+        then the conversation snapshot is static (no refresh) until Esc is pressed.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-detail-004">
+    <title>Auto-fallback on pane death</title>
+    <description>When the selected pane dies while in LIVE mode, the detail panel
+    automatically switches to CONV mode with a dim "session ended" indicator.
+    If already in CONV mode, no disruption occurs.</description>
+    <trace>REQ-F023</trace>
+    <acceptance_criteria>
+      <criterion id="fr-detail-004-ac1">
+        Given the detail panel is in LIVE mode for arcforge:1.1,
+        when arcforge:1.1 disappears from the tmux pane list,
+        then the detail panel switches to CONV mode and shows a dim "session ended" indicator.
+      </criterion>
+      <criterion id="fr-detail-004-ac2">
+        Given the detail panel is in CONV mode for arcforge:1.1,
+        when arcforge:1.1 disappears,
+        then the JSONL conversation remains visible with "session ended" indicator. No mode switch.
+      </criterion>
+      <criterion id="fr-detail-004-ac3">
+        Given the pane has died and detail shows CONV fallback,
+        when user presses Tab (trying to switch to LIVE),
+        then nothing happens — Tab is a no-op when pane is gone.
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+  <requirement id="fr-detail-005">
+    <title>Mode indicator in detail header</title>
+    <description>The detail panel metadata header line includes a mode indicator showing
+    the current source and state.</description>
+    <trace>REQ-F031</trace>
+    <acceptance_criteria>
+      <criterion id="fr-detail-005-ac1">
+        Given LIVE following mode,
+        when the header renders,
+        then it shows [LIVE] after the metadata (e.g., "arcforge:1.1 · Claude 2.1.87 · 27% ctx  [LIVE]").
+      </criterion>
+      <criterion id="fr-detail-005-ac2">
+        Given CONV following mode,
+        when the header renders,
+        then it shows [CONV].
+      </criterion>
+      <criterion id="fr-detail-005-ac3">
+        Given LIVE frozen mode,
+        when the header renders,
+        then it shows [LIVE ⏸].
+      </criterion>
+      <criterion id="fr-detail-005-ac4">
+        Given CONV frozen mode,
+        when the header renders,
+        then it shows [CONV ⏸].
+      </criterion>
+    </acceptance_criteria>
+  </requirement>
+
+</detail>

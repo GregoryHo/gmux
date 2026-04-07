@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { render } from "ink-testing-library";
-import { SessionList } from "../components/session-list.js";
+import { SessionList, statusColor } from "../components/session-list.js";
 import { truncateCwd, formatDuration } from "../components/session-list.js";
 import type { AgentSession } from "../types.js";
 
@@ -26,7 +26,7 @@ function makeSession(overrides: Partial<AgentSession> = {}): AgentSession {
 describe("SessionList", () => {
   it("renders empty state when no sessions", () => {
     const { lastFrame } = render(
-      <SessionList sessions={[]} selectedIndex={0} />,
+      <SessionList sessions={[]} selectedTarget={null} />,
     );
     expect(lastFrame()).toContain("No agent sessions detected");
   });
@@ -56,7 +56,7 @@ describe("SessionList", () => {
     ];
 
     const { lastFrame } = render(
-      <SessionList sessions={sessions} selectedIndex={0} />,
+      <SessionList sessions={sessions} selectedTarget="app:0.0" />,
     );
     const frame = lastFrame()!;
 
@@ -70,14 +70,14 @@ describe("SessionList", () => {
     expect(frame).toContain("misc");
   });
 
-  it("shows selection indicator on selected row", () => {
+  it("shows selection indicator on selected row (fr-ux-001-ac1)", () => {
     const sessions = [
       makeSession({ target: "a:0.0", sessionName: "first" }),
       makeSession({ target: "b:0.0", sessionName: "second" }),
     ];
 
     const { lastFrame } = render(
-      <SessionList sessions={sessions} selectedIndex={1} />,
+      <SessionList sessions={sessions} selectedTarget="b:0.0" />,
     );
     const frame = lastFrame()!;
     const lines = frame.split("\n");
@@ -89,6 +89,24 @@ describe("SessionList", () => {
     expect(secondLine).toContain("▸");
   });
 
+  it("shows ▸ on matching target regardless of list position (fr-ux-001-ac1)", () => {
+    const sessions = [
+      makeSession({ target: "arcforge:1.1", sessionName: "arcforge" }),
+      makeSession({ target: "workspace:1.1", sessionName: "workspace" }),
+    ];
+
+    const { lastFrame } = render(
+      <SessionList sessions={sessions} selectedTarget="arcforge:1.1" />,
+    );
+    const frame = lastFrame()!;
+    const lines = frame.split("\n");
+
+    const arcforgeLine = lines.find((l) => l.includes("arcforge"));
+    const workspaceLine = lines.find((l) => l.includes("workspace"));
+    expect(arcforgeLine).toContain("▸");
+    expect(workspaceLine).not.toContain("▸");
+  });
+
   it("shows session name in bold and command dimmed", () => {
     const sessions = [
       makeSession({
@@ -98,7 +116,7 @@ describe("SessionList", () => {
     ];
 
     const { lastFrame } = render(
-      <SessionList sessions={sessions} selectedIndex={0} />,
+      <SessionList sessions={sessions} selectedTarget="test:0.0" />,
     );
     const frame = lastFrame()!;
     expect(frame).toContain("arcforge");
@@ -112,11 +130,23 @@ describe("SessionList", () => {
     ];
 
     const { lastFrame } = render(
-      <SessionList sessions={sessions} selectedIndex={0} />,
+      <SessionList sessions={sessions} selectedTarget="a:0.0" />,
     );
     const frame = lastFrame()!;
     expect(frame).toContain("active");
     expect(frame).toContain("idle");
+  });
+
+  it("shows no indicator when selectedTarget is null", () => {
+    const sessions = [
+      makeSession({ target: "a:0.0", sessionName: "first" }),
+    ];
+
+    const { lastFrame } = render(
+      <SessionList sessions={sessions} selectedTarget={null} />,
+    );
+    const frame = lastFrame()!;
+    expect(frame).not.toContain("▸");
   });
 });
 
@@ -161,7 +191,7 @@ describe("SessionList with maxHeight", () => {
       makeSession({ target: `s${i}:1.0`, sessionName: `session${i}` }),
     );
     const { lastFrame } = render(
-      <SessionList sessions={sessions} selectedIndex={0} maxHeight={5} />,
+      <SessionList sessions={sessions} selectedTarget="s0:1.0" maxHeight={5} />,
     );
     const frame = lastFrame() ?? "";
     // Should NOT show all 10 session names
@@ -174,7 +204,7 @@ describe("SessionList with maxHeight", () => {
       makeSession({ target: `s${i}:1.0`, sessionName: `session${i}` }),
     );
     const { lastFrame } = render(
-      <SessionList sessions={sessions} selectedIndex={3} maxHeight={5} />,
+      <SessionList sessions={sessions} selectedTarget="s3:1.0" maxHeight={5} />,
     );
     const frame = lastFrame() ?? "";
     // When selected is in the middle, both indicators may appear
@@ -182,41 +212,108 @@ describe("SessionList with maxHeight", () => {
   });
 });
 
-describe("SessionList with searchQuery", () => {
-  it("filters sessions by name", () => {
+describe("SessionList search filtering (now done outside component)", () => {
+  it("renders only pre-filtered sessions passed in (fr-ux-001-ac2 related)", () => {
+    // Filtering is now done in app.tsx — SessionList receives already-filtered sessions
     const sessions = [
       makeSession({ target: "a:1.0", sessionName: "arcforge" }),
-      makeSession({ target: "w:1.0", sessionName: "workspace" }),
-      makeSession({ target: "s:1.0", sessionName: "settings" }),
     ];
     const { lastFrame } = render(
-      <SessionList sessions={sessions} selectedIndex={0} searchQuery="arc" />,
+      <SessionList sessions={sessions} selectedTarget="a:1.0" />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("arcforge");
-    expect(frame).not.toContain("workspace");
-    expect(frame).not.toContain("settings");
   });
 
-  it("shows no matching message when search has no results", () => {
-    const sessions = [
-      makeSession({ target: "a:1.0", sessionName: "arcforge" }),
-    ];
+  it("shows empty state when passed empty filtered list", () => {
     const { lastFrame } = render(
-      <SessionList sessions={sessions} selectedIndex={0} searchQuery="zzz" />,
+      <SessionList sessions={[]} selectedTarget={null} />,
     );
     const frame = lastFrame() ?? "";
-    expect(frame).toContain("No matching sessions");
+    expect(frame).toContain("No agent sessions detected");
+  });
+});
+
+describe("SessionList selected row highlight (fr-ux-004)", () => {
+  it("selected row shows ▸ indicator for the selected session (fr-ux-004-ac1)", () => {
+    const sessions = [
+      makeSession({ target: "arcforge:1.1", sessionName: "arcforge" }),
+      makeSession({ target: "workspace:1.1", sessionName: "workspace" }),
+    ];
+
+    const { lastFrame } = render(
+      <SessionList sessions={sessions} selectedTarget="arcforge:1.1" />,
+    );
+    const frame = lastFrame()!;
+    const lines = frame.split("\n");
+
+    const arcforgeLine = lines.find((l) => l.includes("arcforge"));
+    expect(arcforgeLine).toContain("▸");
   });
 
-  it("is case-insensitive", () => {
+  it("only the selected row shows ▸, non-selected rows do not (fr-ux-004-ac2)", () => {
     const sessions = [
-      makeSession({ target: "a:1.0", sessionName: "ArcForge" }),
+      makeSession({ target: "arcforge:1.1", sessionName: "arcforge" }),
+      makeSession({ target: "workspace:1.1", sessionName: "workspace" }),
     ];
+
     const { lastFrame } = render(
-      <SessionList sessions={sessions} selectedIndex={0} searchQuery="arcforge" />,
+      <SessionList sessions={sessions} selectedTarget="arcforge:1.1" />,
     );
-    const frame = lastFrame() ?? "";
-    expect(frame).toContain("ArcForge");
+    const frame = lastFrame()!;
+    const lines = frame.split("\n");
+
+    const arcforgeLine = lines.find((l) => l.includes("arcforge"));
+    const workspaceLine = lines.find((l) => l.includes("workspace"));
+    expect(arcforgeLine).toContain("▸");
+    expect(workspaceLine).not.toContain("▸");
+  });
+});
+
+describe("statusColor", () => {
+  it("returns green for active status", () => {
+    expect(statusColor("active")).toEqual({ color: "green" });
+  });
+
+  it("returns dimColor for idle status", () => {
+    expect(statusColor("idle")).toEqual({ dimColor: true });
+  });
+
+  it("returns yellow for needs_attention status", () => {
+    expect(statusColor("needs_attention")).toEqual({ color: "yellow" });
+  });
+
+  it("returns dim red for unknown status", () => {
+    expect(statusColor("unknown")).toEqual({ color: "red", dimColor: true });
+  });
+});
+
+describe("SessionList status dot symbols", () => {
+  it("renders ● dot for active status", () => {
+    const { lastFrame } = render(
+      <SessionList sessions={[makeSession({ status: "active" })]} selectedTarget="test:0.0" />,
+    );
+    expect(lastFrame()).toContain("●");
+  });
+
+  it("renders ○ dot for idle status", () => {
+    const { lastFrame } = render(
+      <SessionList sessions={[makeSession({ status: "idle" })]} selectedTarget="test:0.0" />,
+    );
+    expect(lastFrame()).toContain("○");
+  });
+
+  it("renders ⚡ dot for needs_attention status", () => {
+    const { lastFrame } = render(
+      <SessionList sessions={[makeSession({ status: "needs_attention" })]} selectedTarget="test:0.0" />,
+    );
+    expect(lastFrame()).toContain("⚡");
+  });
+
+  it("renders ? dot for unknown status", () => {
+    const { lastFrame } = render(
+      <SessionList sessions={[makeSession({ status: "unknown" })]} selectedTarget="test:0.0" />,
+    );
+    expect(lastFrame()).toContain("?");
   });
 });

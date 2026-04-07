@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# gmux-status.sh — Claude Code hook script (Stop event)
-# Sends a status event to the gmux dashboard socket.
-# Install: claude hooks add Stop --script "path/to/gmux-status.sh"
+# gmux-attention.sh — Claude Code hook script (Notification event)
+# Sends a needs_attention status to the gmux dashboard socket.
+# Install: claude hooks add Notification --script "path/to/gmux-attention.sh"
 #
 # Exits 0 always — must never block Claude Code.
 
@@ -10,10 +10,11 @@ SOCKET="/tmp/gmux.sock"
 # If socket doesn't exist, exit silently
 [ -S "$SOCKET" ] || exit 0
 
-# Build the JSON payload
+# Extract session and pane from tmux
 SESSION="$(tmux display-message -p '#{session_name}' 2>/dev/null || echo unknown)"
 PANE="$(tmux display-message -p '#{window_index}.#{pane_index}' 2>/dev/null || echo unknown)"
-JSON="{\"event\":\"status\",\"session\":\"${SESSION}\",\"pane\":\"${PANE}\",\"status\":\"idle\"}"
+
+JSON="{\"event\":\"status\",\"session\":\"${SESSION}\",\"pane\":\"${PANE}\",\"status\":\"needs_attention\"}"
 
 # Try to write to the socket. Use socat if available, fall back to nc.
 if command -v socat >/dev/null 2>&1; then
