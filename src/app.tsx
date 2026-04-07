@@ -64,6 +64,7 @@ export function App({ config, server, hooksConfigured }: AppProps) {
   const [detailFrozen, setDetailFrozen] = useState(false);
   const [liveContent, setLiveContent] = useState("");
   const [sourcePaneWidth, setSourcePaneWidth] = useState<number | null>(null);
+  const [paneAlive, setPaneAlive] = useState(true);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [searchQuery, setSearchQuery] = useState<string | null>(null);
   const [searchInputActive, setSearchInputActive] = useState(false);
@@ -226,6 +227,7 @@ export function App({ config, server, hooksConfigured }: AppProps) {
 
   useEffect(() => {
     if (detailSource !== "live" || !selectedSession) return;
+    setPaneAlive(true);
 
     let cancelled = false;
     const tick = async () => {
@@ -235,18 +237,21 @@ export function App({ config, server, hooksConfigured }: AppProps) {
       ]);
       if (cancelled) return;
       if (content === null) {
+        setPaneAlive(false);
         setDetailSource("conv");
         return;
       }
+      setPaneAlive(true);
       if (width !== null) setSourcePaneWidth(width);
       if (!detailFrozenRef.current) {
         setLiveContent(content);
       }
+      if (!cancelled) timer = setTimeout(tick, 1000);
     };
 
+    let timer: ReturnType<typeof setTimeout> | null = null;
     void tick();
-    const timer = setInterval(() => void tick(), 1000);
-    return () => { cancelled = true; clearInterval(timer); };
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [selectedSession?.target, detailSource]);
 
   const handleFocusSession = useCallback(async () => {
@@ -498,7 +503,7 @@ export function App({ config, server, hooksConfigured }: AppProps) {
           visibleLines={detailFrozen ? focusHeight - 2 : heights.detail}
           terminalWidth={cols}
           sourcePaneWidth={sourcePaneWidth}
-          paneAlive={selectedSession ? sessions.some(s => s.target === selectedSession.target) : false}
+          paneAlive={paneAlive}
         />
       </Box>
 

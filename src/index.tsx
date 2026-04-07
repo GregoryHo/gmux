@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { render } from "ink";
 import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { App } from "./app.js";
 import { startup, cleanup, registerSignalHandlers } from "./lifecycle.js";
 import { loadConfig } from "./config.js";
@@ -10,7 +11,7 @@ import { detectHooks } from "./hooks-detector.js";
 async function main() {
   if (process.argv.includes("--setup-hooks")) {
     const { setupHooks } = await import("./setup-hooks.js");
-    const hooksDir = resolve(dirname(new URL(import.meta.url).pathname), "..", "hooks");
+    const hooksDir = resolve(dirname(fileURLToPath(import.meta.url)), "..", "hooks");
     try {
       await setupHooks(hooksDir);
       console.log("gmux: hooks configured in ~/.claude/settings.json");
