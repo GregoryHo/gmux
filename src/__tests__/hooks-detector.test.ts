@@ -57,14 +57,14 @@ describe("detectHooks", () => {
     expect(await detectHooks(TEST_PATH)).toBe(true);
   });
 
-  it("returns true for old broken { script } format (backward compat)", async () => {
+  it("returns false for old broken { script } format (not valid anymore)", async () => {
     const settings = {
       hooks: {
         Stop: [{ script: "/path/to/gmux-status.sh" }],
       },
     };
     mockedReadFile.mockResolvedValue(JSON.stringify(settings) as unknown as Buffer);
-    expect(await detectHooks(TEST_PATH)).toBe(true);
+    expect(await detectHooks(TEST_PATH)).toBe(false);
   });
 
   it("returns false when settings.json has no hooks key", async () => {

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { hasGmuxHookEntry } from "./utils.js";
 
 const CLAUDE_SETTINGS_PATH = join(homedir(), ".claude", "settings.json");
 
@@ -25,26 +26,11 @@ export async function detectHooks(
   if (!hooks || typeof hooks !== "object") return false;
 
   const hookObj = hooks as Record<string, unknown>;
+  const stopHooks = hookObj.Stop;
+  const notifHooks = hookObj.Notification;
 
-  const hasGmuxHook = (eventHooks: unknown): boolean => {
-    if (!Array.isArray(eventHooks)) return false;
-    return eventHooks.some((rule: unknown) => {
-      if (typeof rule !== "object" || rule === null) return false;
-      const r = rule as Record<string, unknown>;
-      // Check correct format: { hooks: [{ command: "...gmux..." }] }
-      const hooks = r.hooks;
-      if (Array.isArray(hooks)) {
-        return hooks.some((h: unknown) => {
-          if (typeof h !== "object" || h === null) return false;
-          const cmd = (h as Record<string, unknown>).command;
-          return typeof cmd === "string" && cmd.includes("gmux");
-        });
-      }
-      // Also detect old broken format: { script: "...gmux..." }
-      const script = r.script;
-      return typeof script === "string" && script.includes("gmux");
-    });
-  };
-
-  return hasGmuxHook(hookObj.Stop) || hasGmuxHook(hookObj.Notification);
+  return (
+    (Array.isArray(stopHooks) && hasGmuxHookEntry(stopHooks)) ||
+    (Array.isArray(notifHooks) && hasGmuxHookEntry(notifHooks))
+  );
 }

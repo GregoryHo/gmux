@@ -1,46 +1,24 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join, resolve, dirname } from "node:path";
 import { homedir } from "node:os";
+import { hasGmuxHookEntry, type HookRule } from "./utils.js";
 
 const CLAUDE_SETTINGS_PATH = join(homedir(), ".claude", "settings.json");
 
 /**
- * Build a Claude Code hook rule entry in the correct format.
  * Claude Code expects: { matcher: "", hooks: [{ type: "command", command: "..." }] }
  */
-function makeHookRule(scriptPath: string): Record<string, unknown> {
+function makeHookRule(scriptPath: string): HookRule {
   return {
     matcher: "",
     hooks: [{ type: "command", command: scriptPath }],
   };
 }
 
-/**
- * Check if a hook event array already contains a gmux entry.
- */
-function hasGmuxEntry(entries: unknown[]): boolean {
-  if (!Array.isArray(entries)) return false;
-  return entries.some((rule: unknown) => {
-    if (typeof rule !== "object" || rule === null) return false;
-    const r = rule as Record<string, unknown>;
-    const hooks = r.hooks;
-    if (!Array.isArray(hooks)) return false;
-    return hooks.some((h: unknown) => {
-      if (typeof h !== "object" || h === null) return false;
-      const cmd = (h as Record<string, unknown>).command;
-      return typeof cmd === "string" && cmd.includes("gmux");
-    });
-  });
-}
-
-/**
- * Remove any malformed gmux entries (old { script: "..." } format).
- */
 function removeOldGmuxEntries(entries: unknown[]): unknown[] {
   return entries.filter((e: unknown) => {
     if (typeof e !== "object" || e === null) return true;
     const obj = e as Record<string, unknown>;
-    // Remove entries with { script: "...gmux..." } (old broken format)
     if (typeof obj.script === "string" && obj.script.includes("gmux")) return false;
     return true;
   });
@@ -66,17 +44,17 @@ export async function setupHooks(
   }
   const hooks = settings.hooks as Record<string, unknown[]>;
 
-  // Clean up any old malformed entries from previous gmux versions
+  // Clean up old malformed entries from previous gmux versions
   if (Array.isArray(hooks.Stop)) hooks.Stop = removeOldGmuxEntries(hooks.Stop);
   if (Array.isArray(hooks.Notification)) hooks.Notification = removeOldGmuxEntries(hooks.Notification);
 
   if (!Array.isArray(hooks.Stop)) hooks.Stop = [];
-  if (!hasGmuxEntry(hooks.Stop)) {
+  if (!hasGmuxHookEntry(hooks.Stop)) {
     hooks.Stop.push(makeHookRule(statusScript));
   }
 
   if (!Array.isArray(hooks.Notification)) hooks.Notification = [];
-  if (!hasGmuxEntry(hooks.Notification)) {
+  if (!hasGmuxHookEntry(hooks.Notification)) {
     hooks.Notification.push(makeHookRule(attentionScript));
   }
 
