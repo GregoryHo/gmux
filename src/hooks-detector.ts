@@ -28,9 +28,20 @@ export async function detectHooks(
 
   const hasGmuxHook = (eventHooks: unknown): boolean => {
     if (!Array.isArray(eventHooks)) return false;
-    return eventHooks.some((h: unknown) => {
-      if (typeof h !== "object" || h === null) return false;
-      const script = (h as Record<string, unknown>).script;
+    return eventHooks.some((rule: unknown) => {
+      if (typeof rule !== "object" || rule === null) return false;
+      const r = rule as Record<string, unknown>;
+      // Check correct format: { hooks: [{ command: "...gmux..." }] }
+      const hooks = r.hooks;
+      if (Array.isArray(hooks)) {
+        return hooks.some((h: unknown) => {
+          if (typeof h !== "object" || h === null) return false;
+          const cmd = (h as Record<string, unknown>).command;
+          return typeof cmd === "string" && cmd.includes("gmux");
+        });
+      }
+      // Also detect old broken format: { script: "...gmux..." }
+      const script = r.script;
       return typeof script === "string" && script.includes("gmux");
     });
   };

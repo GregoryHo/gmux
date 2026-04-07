@@ -17,6 +17,10 @@ const HOOKS_DIR = "/usr/local/lib/gmux/hooks";
 const STATUS_SCRIPT = `${HOOKS_DIR}/gmux-status.sh`;
 const ATTENTION_SCRIPT = `${HOOKS_DIR}/gmux-attention.sh`;
 
+function makeExpectedRule(script: string) {
+  return { matcher: "", hooks: [{ type: "command", command: script }] };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockedMkdir.mockResolvedValue(undefined);
@@ -24,18 +28,15 @@ beforeEach(() => {
 });
 
 describe("setupHooks", () => {
-  it("creates settings.json with Stop and Notification hook entries when file does not exist", async () => {
+  it("creates settings.json with correct hook format when file does not exist", async () => {
     mockedReadFile.mockRejectedValue(Object.assign(new Error("ENOENT"), { code: "ENOENT" }));
 
     await setupHooks(HOOKS_DIR, TEST_SETTINGS);
 
     expect(mockedWriteFile).toHaveBeenCalledOnce();
-    const [writePath, writeContent] = mockedWriteFile.mock.calls[0];
-    expect(writePath).toBe(TEST_SETTINGS);
-
-    const written = JSON.parse(writeContent as string);
-    expect(written.hooks.Stop).toEqual([{ script: STATUS_SCRIPT }]);
-    expect(written.hooks.Notification).toEqual([{ script: ATTENTION_SCRIPT }]);
+    const written = JSON.parse(mockedWriteFile.mock.calls[0][1] as string);
+    expect(written.hooks.Stop).toEqual([makeExpectedRule(STATUS_SCRIPT)]);
+    expect(written.hooks.Notification).toEqual([makeExpectedRule(ATTENTION_SCRIPT)]);
   });
 
   it("preserves existing settings when adding hooks", async () => {
@@ -47,56 +48,60 @@ describe("setupHooks", () => {
 
     await setupHooks(HOOKS_DIR, TEST_SETTINGS);
 
-    const [, writeContent] = mockedWriteFile.mock.calls[0];
-    const written = JSON.parse(writeContent as string);
-
+    const written = JSON.parse(mockedWriteFile.mock.calls[0][1] as string);
     expect(written.permissions).toEqual({ allow: ["Bash"] });
     expect(written.someOtherSetting).toBe(true);
-    expect(written.hooks.Stop).toEqual([{ script: STATUS_SCRIPT }]);
-    expect(written.hooks.Notification).toEqual([{ script: ATTENTION_SCRIPT }]);
+    expect(written.hooks.Stop).toEqual([makeExpectedRule(STATUS_SCRIPT)]);
+    expect(written.hooks.Notification).toEqual([makeExpectedRule(ATTENTION_SCRIPT)]);
   });
 
   it("is idempotent — running twice does not duplicate entries", async () => {
     const existingSettings = {
       hooks: {
-        Stop: [{ script: STATUS_SCRIPT }],
-        Notification: [{ script: ATTENTION_SCRIPT }],
+        Stop: [makeExpectedRule(STATUS_SCRIPT)],
+        Notification: [makeExpectedRule(ATTENTION_SCRIPT)],
       },
     };
     mockedReadFile.mockResolvedValue(JSON.stringify(existingSettings) as unknown as Buffer);
 
     await setupHooks(HOOKS_DIR, TEST_SETTINGS);
 
-    const [, writeContent] = mockedWriteFile.mock.calls[0];
-    const written = JSON.parse(writeContent as string);
-
+    const written = JSON.parse(mockedWriteFile.mock.calls[0][1] as string);
     expect(written.hooks.Stop).toHaveLength(1);
     expect(written.hooks.Notification).toHaveLength(1);
-    expect(written.hooks.Stop[0].script).toBe(STATUS_SCRIPT);
-    expect(written.hooks.Notification[0].script).toBe(ATTENTION_SCRIPT);
+  });
+
+  it("cleans up old broken { script } format and replaces with correct format", async () => {
+    const existingSettings = {
+      hooks: {
+        Stop: [{ script: "/old/path/gmux-status.sh" }],
+        Notification: [{ script: "/old/path/gmux-attention.sh" }],
+      },
+    };
+    mockedReadFile.mockResolvedValue(JSON.stringify(existingSettings) as unknown as Buffer);
+
+    await setupHooks(HOOKS_DIR, TEST_SETTINGS);
+
+    const written = JSON.parse(mockedWriteFile.mock.calls[0][1] as string);
+    // Old entries removed, new correct entries added
+    expect(written.hooks.Stop).toEqual([makeExpectedRule(STATUS_SCRIPT)]);
+    expect(written.hooks.Notification).toEqual([makeExpectedRule(ATTENTION_SCRIPT)]);
   });
 
   it("preserves other hook entries when adding gmux hooks", async () => {
     const existingSettings = {
       hooks: {
-        Stop: [{ script: "/other/tool.sh" }],
-        Notification: [{ script: "/other/notify.sh" }],
+        Stop: [{ matcher: "", hooks: [{ type: "command", command: "/other/tool.sh" }] }],
+        Notification: [{ matcher: "idle_prompt", hooks: [{ type: "command", command: "/other/notify.sh" }] }],
       },
     };
     mockedReadFile.mockResolvedValue(JSON.stringify(existingSettings) as unknown as Buffer);
 
     await setupHooks(HOOKS_DIR, TEST_SETTINGS);
 
-    const [, writeContent] = mockedWriteFile.mock.calls[0];
-    const written = JSON.parse(writeContent as string);
-
+    const written = JSON.parse(mockedWriteFile.mock.calls[0][1] as string);
     expect(written.hooks.Stop).toHaveLength(2);
-    expect(written.hooks.Stop).toContainEqual({ script: "/other/tool.sh" });
-    expect(written.hooks.Stop).toContainEqual({ script: STATUS_SCRIPT });
-
     expect(written.hooks.Notification).toHaveLength(2);
-    expect(written.hooks.Notification).toContainEqual({ script: "/other/notify.sh" });
-    expect(written.hooks.Notification).toContainEqual({ script: ATTENTION_SCRIPT });
   });
 
   it("throws when writeFile fails", async () => {
